@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Moms' Math"/>
+<title>Moms' Math</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #FAF6F0; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
+  #root { min-height: 100%; min-height: 100dvh; }
+  input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0; position: absolute; width: 100%; height: 100%; }
+  input, textarea, button { font-family: inherit; -webkit-appearance: none; }
+  textarea::placeholder, input::placeholder { color: #BFB2BA; }
+  ::-webkit-scrollbar { width: 0; height: 0; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.23.0/babel.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+// ─── Storage (in-memory for artifact) ─────────────────────────────
+function loadState() {
+  try { var r=localStorage.getItem("momsmath_v2"); return r?JSON.parse(r):null; } catch(e){return null;}
+}
+function saveState(s) {
+  try { localStorage.setItem("momsmath_v2", JSON.stringify(s)); } catch(e){}
+}
+
+// ─── Design tokens ─────────────────────────────────────────────────
+const DB = {
+  bg:          "#FAF6F0",
+  paper:       "#FFFFFF",
+  ink:         "#1C1917",
+  ink2:        "#57534E",
+  muted:       "#A8A29E",
+  hairline:    "#E7E0D8",
+  peach:       "#E1A089",
+  peachDeep:   "#BF7958",
+  peachSoft:   "#F5E6DE",
+  night:       "#7B5E7A",
+  nightSoft:   "#EDE5EC",
+  serif:       "'Fraunces', Georgia, serif",
+  sans:        "'Inter', system-ui, sans-serif",
+};
+
+// Baby colors — Daybreak palette
+const BABY_COLORS = [
+  { id: "peach",   bg: DB.bg, accent: "#E1A089", label: "Peach"  },
+  { id: "rose",    bg: DB.bg, accent: "#E5A0B0", label: "Rose"   },
+  { id: "butter",  bg: DB.bg, accent: "#D4A84B", label: "Butter" },
+  { id: "mint",    bg: DB.bg, accent: "#7EB89A", label: "Mint"   },
+  { id: "sky",     bg: DB.bg, accent: "#7EB8D4", label: "Sky"    },
+  { id: "lilac",   bg: DB.bg, accent: "#A99AE0", label: "Lilac"  },
+];
+
+const FIELD_KEYS = [
+  "wakeNight","sleep1","awake2","sleep2","awake3","sleep3",
+  "awake4","sleep4","awake5","sleep5","awake6","nightSleep"
+];
+const FIELD_LABELS = {
+  wakeNight:  "Woke from night sleep",
+  sleep1:     "Nap 1 — start",
+  awake2:     "Awake after nap 1",
+  sleep2:     "Nap 2 — start",
+  awake3:     "Awake after nap 2",
+  sleep3:     "Nap 3 — start",
+  awake4:     "Awake after nap 3",
+  sleep4:     "Nap 4 — start",
+  awake5:     "Awake after nap 4",
+  sleep5:     "Nap 5 — start",
+  awake6:     "Awake after nap 5",
+  nightSleep: "Night sleep — start",
+};
+const FIELD_ICONS = {
+  wakeNight:"sun", sleep1:"moon", awake2:"sun", sleep2:"moon", awake3:"sun",
+  sleep3:"moon", awake4:"sun", sleep4:"moon", awake5:"sun", sleep5:"moon",
+  awake6:"sun", nightSleep:"moon",
+};
+const SLEEP_KEYS = new Set(["sleep1","sleep2","sleep3","sleep4","sleep5","nightSleep","wakeNight"]);
+
+// ─── Helpers (UNCHANGED logic) ─────────────────────────────────────
+function todayStr() { return new Date().toISOString().slice(0,10); }
+function timeToMin(t) {
+  if (!t || t === "") return null;
+  const p = t.split(":");
+  const h = Number(p[0]), m = Number(p[1]);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
+}
+function diffMin(a, b) {
+  if (a === null || b === null) return null;
+  let d = b - a; if (d < 0) d += 1440; return d;
+}
+function fmtDur(min) {
+  if (min === null || min === undefined || min < 0) return "—";
+  const h = Math.floor(min/60), m = min%60;
+  if (h===0) return m+"m"; if (m===0) return h+"h"; return h+"h "+m+"m";
+}
+function fmtDurLong(min) {
+  if (min === null || min === undefined || min < 0) return "—";
+  const h = Math.floor(min/60), m = min%60;
+  if (h===0) return m+" min"; if (m===0) return h+"h"; return h+"h "+m+" min";
+}
+function nowHHMM() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+}
+function calcDay(day) {
+  const g = k => timeToMin(day[k] || "");
+  const wn=g("wakeNight"),s1=g("sleep1"),a2=g("awake2"),s2=g("sleep2"),a3=g("awake3"),
+        s3=g("sleep3"),a4=g("awake4"),s4=g("sleep4"),a5=g("awake5"),s5=g("sleep5"),a6=g("awake6"),ns=g("nightSleep");
+  const aw1 = s1!==null&&wn!==null?diffMin(wn,s1):null;
+  const aw2 = s2!==null&&a2!==null?diffMin(a2,s2):null;
+  const aw3 = s3!==null&&a3!==null?diffMin(a3,s3):null;
+  const aw4 = s4!==null&&a4!==null?diffMin(a4,s4):null;
+  const aw5 = s5!==null&&a5!==null?diffMin(a5,s5):null;
+  const candidates = [a6,a5,a4,a3,a2,wn];
+  var lastAwakeStart = null;
+  if (ns !== null) { for (var ci=0;ci<candidates.length;ci++){if(candidates[ci]!==null){lastAwakeStart=candidates[ci];break;}} }
+  const awLast = ns!==null&&lastAwakeStart!==null?diffMin(lastAwakeStart,ns):null;
+  const numbered = [aw1,aw2,aw3,aw4,aw5].filter(v=>v!==null);
+  const awakeWindows = awLast!==null ? numbered.concat([awLast]) : numbered;
+  const awakeTotal = awakeWindows.length?awakeWindows.reduce(function(a,b){return a+b;},0):null;
+  const n1r=s1!==null&&a2!==null?diffMin(s1,a2):null;
+  const n2r=s2!==null&&a3!==null?diffMin(s2,a3):null;
+  const n3r=s3!==null&&a4!==null?diffMin(s3,a4):null;
+  const n4r=s4!==null&&a5!==null?diffMin(s4,a5):null;
+  const n5r=s5!==null&&a6!==null?diffMin(s5,a6):null;
+  const sleepNaps=[n1r,n2r,n3r,n4r,n5r].filter(v=>v!==null);
+  const sleepDay=sleepNaps.length?sleepNaps.reduce(function(a,b){return a+b;},0):null;
+  const sleepNight=ns!==null&&wn!==null?(1440-ns)+wn:null;
+  const sleepTotal=sleepDay!==null||sleepNight!==null?(sleepDay||0)+(sleepNight||0):null;
+  return {aw1,aw2,aw3,aw4,aw5,awLast,awakeTotal,n1:n1r,n2:n2r,n3:n3r,n4:n4r,n5:n5r,sleepDay,sleepNight,sleepTotal,napCount:sleepNaps.length};
+}
+function getLiveStatus(dayData, isToday) {
+  const filled = FIELD_KEYS.filter(k=>dayData[k]);
+  if (!filled.length) return {status:"unknown",duration:null};
+  if (!isToday) {
+    const last = filled[filled.length-1];
+    return {status:SLEEP_KEYS.has(last)&&last!=="wakeNight"?"night":"complete",duration:null};
+  }
+  const now=new Date(),nowMin=now.getHours()*60+now.getMinutes();
+  const last=filled[filled.length-1],lastMin=timeToMin(dayData[last]);
+  if (lastMin===null) return {status:"unknown",duration:null};
+  if (last==="nightSleep") {
+    const dur=nowMin<lastMin?(1440-lastMin+nowMin):(nowMin-lastMin);
+    return dur>840?{status:"unknown",duration:null}:{status:"sleeping",duration:dur};
+  }
+  if (last==="wakeNight") {
+    const dur=diffMin(lastMin,nowMin);
+    return dur>720?{status:"unknown",duration:null}:{status:"awake",duration:dur};
+  }
+  const isSleeping=SLEEP_KEYS.has(last),dur=diffMin(lastMin,nowMin),cap=isSleeping?240:720;
+  if (dur===null||dur>cap) return {status:"unknown",duration:null};
+  return {status:isSleeping?"sleeping":"awake",duration:dur};
+}
+function getNextField(dayData) {
+  const nowMin=new Date().getHours()*60+new Date().getMinutes();
+  const isNightTime=nowMin>=1140||nowMin<420;
+  for (var i=0;i<FIELD_KEYS.length;i++) {
+    const key=FIELD_KEYS[i];
+    if (!dayData[key]) {
+      if (isNightTime&&key!=="nightSleep"&&key!=="wakeNight") {
+        const prevKey=i>0?FIELD_KEYS[i-1]:null;
+        const prevIsSleep=prevKey&&SLEEP_KEYS.has(prevKey)&&prevKey!=="wakeNight";
+        if (!prevIsSleep) return "nightSleep";
+      }
+      return key;
+    }
+  }
+  return null;
+}
+function getVisibleFields(dayData) {
+  const result=[];
+  for (var i=0;i<FIELD_KEYS.length;i++){const key=FIELD_KEYS[i];result.push(key);if(!dayData[key])break;}
+  if (!result.includes("nightSleep")&&FIELD_KEYS.slice(0,-1).some(function(k){return dayData[k];})) result.push("nightSleep");
+  return result;
+}
+function shiftDate(date,delta,setDate){
+  const d=new Date(date+"T12:00:00");d.setDate(d.getDate()+delta);
+  const str=d.toISOString().slice(0,10);if(str<=todayStr())setDate(str);
+}
+function fmtDate(str){
+  const d=new Date(str+"T12:00:00");
+  return d.toLocaleDateString("en-GB",{month:"short",day:"numeric",weekday:"short"});
+}
+function fmtDateLong(str){
+  const d=new Date(str+"T12:00:00");
+  return d.toLocaleDateString("en-GB",{weekday:"long",month:"short",day:"numeric"});
+}
+function getAge(dob){
+  if(!dob)return"";
+  const days=Math.floor((new Date()-new Date(dob))/86400000);
+  if(days<30)return days+" days old";
+  const mo=Math.floor(days/30.44);
+  if(mo<24)return mo+" months old";
+  return Math.floor(mo/12)+" years old";
+}
+function getDatesBack(n){
+  const r=[];for(var i=0;i<n;i++){const d=new Date();d.setDate(d.getDate()-i);r.push(d.toISOString().slice(0,10));}return r;
+}
+
+// ─── SVG Icons ─────────────────────────────────────────────────────
+function Ic(props) {
+  var name=props.name, size=props.size||16, color=props.color||"currentColor", sw=props.sw||1.6;
+  var s={width:size,height:size,display:"block",flexShrink:0};
+  var p={stroke:color,strokeWidth:sw,strokeLinecap:"round",strokeLinejoin:"round",fill:"none"};
+  if (name==="moon")   return <svg viewBox="0 0 24 24" style={s}><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" {...p}/></svg>;
+  if (name==="sun")    return <svg viewBox="0 0 24 24" style={s}><circle cx="12" cy="12" r="5" {...p}/><line x1="12" y1="2" x2="12" y2="3" {...p}/><line x1="12" y1="21" x2="12" y2="22" {...p}/><line x1="4.22" y1="4.22" x2="4.93" y2="4.93" {...p}/><line x1="19.07" y1="19.07" x2="19.78" y2="19.78" {...p}/><line x1="2" y1="12" x2="3" y2="12" {...p}/><line x1="21" y1="12" x2="22" y2="12" {...p}/><line x1="4.22" y1="19.78" x2="4.93" y2="19.07" {...p}/><line x1="19.07" y1="4.93" x2="19.78" y2="4.22" {...p}/></svg>;
+  if (name==="chevL")  return <svg viewBox="0 0 24 24" style={s}><polyline points="15 18 9 12 15 6" {...p}/></svg>;
+  if (name==="chevR")  return <svg viewBox="0 0 24 24" style={s}><polyline points="9 18 15 12 9 6" {...p}/></svg>;
+  if (name==="gear")   return <svg viewBox="0 0 24 24" style={s}><circle cx="12" cy="12" r="3" {...p}/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" {...p}/></svg>;
+  if (name==="plus")   return <svg viewBox="0 0 24 24" style={s}><line x1="12" y1="5" x2="12" y2="19" {...p}/><line x1="5" y1="12" x2="19" y2="12" {...p}/></svg>;
+  if (name==="arrow")  return <svg viewBox="0 0 24 24" style={s}><line x1="5" y1="12" x2="19" y2="12" {...p}/><polyline points="12 5 19 12 12 19" {...p}/></svg>;
+  if (name==="bar")    return <svg viewBox="0 0 24 24" style={s}><line x1="18" y1="20" x2="18" y2="10" {...p}/><line x1="12" y1="20" x2="12" y2="4" {...p}/><line x1="6" y1="20" x2="6" y2="14" {...p}/></svg>;
+  if (name==="clock")  return <svg viewBox="0 0 24 24" style={s}><circle cx="12" cy="12" r="10" {...p}/><polyline points="12 6 12 12 16 14" {...p}/></svg>;
+  if (name==="baby")   return <svg viewBox="0 0 24 24" style={s}><circle cx="12" cy="12" r="10" {...p}/><path d="M8 14s1.5 2 4 2 4-2 4-2" {...p}/><line x1="9" y1="9" x2="9.01" y2="9" {...p}/><line x1="15" y1="9" x2="15.01" y2="9" {...p}/></svg>;
+  return <svg viewBox="0 0 24 24" style={s}><circle cx="12" cy="12" r="3" fill={color}/></svg>;
+}
+
+// App icon
+function AppIcon(props) {
+  var size=props.size||32, r=props.r||Math.round(size*0.22);
+  return (
+    <div style={{width:size,height:size,borderRadius:r,background:"linear-gradient(145deg,#F2D0BC,#E1A089,#BF7958)",
+      display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+      boxShadow:"inset 0 1px 0 rgba(255,255,255,0.3)"}}>
+      <span style={{fontFamily:DB.serif,fontSize:size*0.62,fontWeight:300,color:"#FFF6EC",lineHeight:1,letterSpacing:-1}}>m</span>
+    </div>
+  );
+}
+
+// Baby avatar dot
+function BabyAvatar(props) {
+  var name=props.name, accent=props.accent, size=props.size||32;
+  return (
+    <div style={{width:size,height:size,borderRadius:size/2,background:accent,
+      display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+      fontFamily:DB.sans,fontWeight:700,fontSize:size*0.42,color:"#fff"}}>
+      {name[0].toUpperCase()}
+    </div>
+  );
+}
+
+// ─── Root App ──────────────────────────────────────────────────────
+function App() {
+  const [screen, setScreen] = useState("intro");
+  const [babies, setBabies] = useState([]);
+  const [activeBabyId, setActiveBabyId] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(todayStr());
+  const [editBabyId, setEditBabyId] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  useEffect(function(){
+    const s=loadState();
+    if(s){setBabies(s.babies||[]);setActiveBabyId(s.activeBabyId||null);if(s.babies&&s.babies.length>0)setScreen("main");}
+  },[]);
+  useEffect(function(){saveState({babies,activeBabyId});},[babies,activeBabyId]);
+  useEffect(function(){const t=setInterval(function(){setTick(function(x){return x+1;});},30000);return function(){clearInterval(t);};},[]);
+
+  const activeBaby = babies.find(function(b){return b.id===activeBabyId;})||babies[0];
+
+  function getDayData(babyId,date){
+    const b=babies.find(function(x){return x.id===babyId;});
+    return (b&&b.days&&b.days[date])||{};
+  }
+  function setDayData(babyId,date,data){
+    setBabies(function(prev){return prev.map(function(b){
+      if(b.id!==babyId)return b;
+      const days=b.days||{};
+      const existing=days[date]||{};
+      const merged=Object.assign({},existing,data);
+      return Object.assign({},b,{days:Object.assign({},days,{[date]:merged})});
+    });});
+  }
+
+  if(screen==="intro") return <IntroScreen onStart={function(){setScreen("addBaby");}}/>;
+  if(screen==="addBaby") return (
+    <AddBabyScreen
+      onSave={function(baby){const nb=Object.assign({},baby,{id:Date.now().toString(),days:{}});setBabies(function(p){return p.concat([nb]);});setActiveBabyId(nb.id);setScreen("main");}}
+      onBack={babies.length>0?function(){setScreen("main");}:null}
+    />
+  );
+  if(screen==="editBaby"&&editBabyId){
+    const baby=babies.find(function(b){return b.id===editBabyId;});
+    return (
+      <AddBabyScreen initial={baby}
+        onSave={function(u){setBabies(function(p){return p.map(function(b){return b.id===editBabyId?Object.assign({},b,u):b;});});setScreen("main");setMenuOpen(false);}}
+        onBack={function(){setScreen("main");setMenuOpen(false);}}
+        onDelete={function(){
+          const rem=babies.filter(function(b){return b.id!==editBabyId;});
+          setBabies(rem);
+          setActiveBabyId(rem[0]?rem[0].id:null);
+          setScreen(rem.length>0?"main":"intro");
+          setMenuOpen(false);
+        }}
+      />
+    );
+  }
+  if(screen==="reports"&&activeBaby) return <ReportsScreen baby={activeBaby} onBack={function(){setScreen("main");}}/>;
+
+  const color=BABY_COLORS.find(function(c){return c.id===(activeBaby&&activeBaby.color);})||BABY_COLORS[0];
+  const dayData=activeBaby?getDayData(activeBaby.id,selectedDate):{};
+
+  return (
+    <div style={{minHeight:"100vh",background:DB.bg,fontFamily:DB.sans,color:DB.ink}}>
+      <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
+      {/* ── Header ── */}
+      <header style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+        padding:"12px 20px",borderBottom:"1px solid "+DB.hairline,
+        background:DB.bg+"f8",backdropFilter:"blur(10px)",position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <AppIcon size={30} r={8}/>
+          <span style={{fontFamily:DB.serif,fontWeight:400,fontSize:17,color:DB.ink,letterSpacing:-0.3}}>
+            moms<span style={{color:DB.peachDeep,fontStyle:"italic"}}>'</span> math
+          </span>
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          {/* Baby avatars */}
+          {babies.map(function(b){
+            const bc=BABY_COLORS.find(function(c){return c.id===b.color;})||BABY_COLORS[0];
+            const isActive=b.id===activeBabyId;
+            return (
+              <button key={b.id} onClick={function(){setActiveBabyId(b.id);setSelectedDate(todayStr());}}
+                style={{width:30,height:30,borderRadius:15,border:isActive?"2px solid "+DB.ink:"2px solid transparent",
+                  background:bc.accent,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+                  fontFamily:DB.sans,fontWeight:700,fontSize:12,color:"#fff",flexShrink:0}}>
+                {b.name[0].toUpperCase()}
+              </button>
+            );
+          })}
+          <button onClick={function(){setMenuOpen(function(x){return !x;});}}
+            style={{width:32,height:32,borderRadius:16,border:"1px solid "+DB.hairline,
+              background:menuOpen?DB.ink:DB.paper,color:menuOpen?"#fff":DB.ink,
+              cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Ic name="gear" size={15}/>
+          </button>
+        </div>
+      </header>
+
+      {/* ── Menu ── */}
+      {menuOpen&&(
+        <div style={{position:"fixed",top:58,right:16,zIndex:200,background:DB.paper,
+          borderRadius:18,boxShadow:"0 8px 40px rgba(0,0,0,0.12)",padding:"8px 0",minWidth:210,
+          border:"1px solid "+DB.hairline}}>
+          <div style={{padding:"6px 16px 4px",fontSize:10,letterSpacing:1.2,textTransform:"uppercase",color:DB.muted,fontWeight:600}}>Babies</div>
+          {babies.map(function(b){
+            const bc=BABY_COLORS.find(function(c){return c.id===b.color;})||BABY_COLORS[0];
+            return (
+              <button key={b.id} onClick={function(){setEditBabyId(b.id);setScreen("editBaby");setMenuOpen(false);}}
+                style={{width:"100%",padding:"9px 16px",border:"none",background:"none",textAlign:"left",
+                  cursor:"pointer",fontSize:14,color:DB.ink,fontFamily:DB.sans,display:"flex",alignItems:"center",gap:10}}>
+                <BabyAvatar name={b.name} accent={bc.accent} size={24}/>
+                <span style={{flex:1}}>{b.name}</span>
+                <span style={{fontSize:11,color:DB.muted}}>Edit</span>
+              </button>
+            );
+          })}
+          <div style={{height:1,background:DB.hairline,margin:"6px 0"}}/>
+          <button onClick={function(){setMenuOpen(false);setScreen("addBaby");}}
+            style={{width:"100%",padding:"10px 16px",border:"none",background:"none",textAlign:"left",
+              cursor:"pointer",fontSize:14,color:DB.peachDeep,fontWeight:600,fontFamily:DB.sans,display:"flex",alignItems:"center",gap:8}}>
+            <Ic name="plus" size={14} color={DB.peachDeep}/>+ Add baby
+          </button>
+          {activeBaby&&(
+            <button onClick={function(){setMenuOpen(false);setScreen("reports");}}
+              style={{width:"100%",padding:"10px 16px",border:"none",background:"none",textAlign:"left",
+                cursor:"pointer",fontSize:14,color:DB.ink,fontFamily:DB.sans,display:"flex",alignItems:"center",gap:8}}>
+              <Ic name="bar" size={14} color={DB.muted}/>Reports
+            </button>
+          )}
+          <div style={{height:1,background:DB.hairline,margin:"6px 0"}}/>
+          <button onClick={function(){setMenuOpen(false);}}
+            style={{width:"100%",padding:"10px 16px",border:"none",background:"none",textAlign:"left",
+              cursor:"pointer",fontSize:13,color:DB.muted,fontFamily:DB.sans}}>Close</button>
+        </div>
+      )}
+      {menuOpen&&<div onClick={function(){setMenuOpen(false);}} style={{position:"fixed",inset:0,zIndex:150}}/>}
+
+      {activeBaby&&(
+        <MainContent baby={activeBaby} color={color} selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate} dayData={dayData}
+          setDayData={function(data){setDayData(activeBaby.id,selectedDate,data);}} tick={tick}/>
+      )}
+    </div>
+  );
+}
+
+// ─── Intro ─────────────────────────────────────────────────────────
+function IntroScreen(props) {
+  var onStart=props.onStart;
+  const features=[
+    {icon:"moon", text:"Five naps + night sleep"},
+    {icon:"clock",text:"Live timers — asleep or awake?"},
+    {icon:"bar",  text:"Weekly & monthly trends"},
+    {icon:"baby", text:"Up to four little ones"},
+  ];
+  return (
+    <div style={{minHeight:"100vh",background:DB.bg,fontFamily:DB.sans,display:"flex",flexDirection:"column",padding:"0 0 32px"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+      {/* Top area with gradient blob */}
+      <div style={{position:"relative",padding:"56px 28px 32px",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:-80,right:-60,width:260,height:260,borderRadius:"50%",
+          background:"radial-gradient(circle, #F5E6DE, transparent 70%)",pointerEvents:"none"}}/>
+        <AppIcon size={64} r={16}/>
+        <h1 style={{fontFamily:DB.serif,fontWeight:400,fontSize:48,lineHeight:1.0,margin:"28px 0 0",letterSpacing:-1.5,color:DB.ink}}>
+          <span style={{fontStyle:"italic",color:DB.peachDeep}}>Soft days,</span><br/>kept simple.
+        </h1>
+        <p style={{fontSize:15,lineHeight:1.6,color:DB.ink2,margin:"14px 0 0",maxWidth:300}}>
+          A warm, simple journal for baby sleep — naps, nights, and the rhythm of small days. Log a moment in one tap.
+        </p>
+      </div>
+      {/* Feature list */}
+      <div style={{padding:"0 28px",display:"flex",flexDirection:"column",gap:10}}>
+        {features.map(function(f){return(
+          <div key={f.text} style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",
+            borderRadius:14,background:DB.paper,border:"1px solid "+DB.hairline}}>
+            <div style={{width:32,height:32,borderRadius:10,background:DB.peachSoft,
+              display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Ic name={f.icon} size={15} color={DB.peachDeep}/>
+            </div>
+            <span style={{fontSize:14,fontWeight:500,color:DB.ink}}>{f.text}</span>
+          </div>
+        );})}
+      </div>
+      {/* CTA */}
+      <div style={{padding:"28px 28px 0",marginTop:"auto"}}>
+        <button onClick={onStart} style={{width:"100%",padding:"17px",borderRadius:100,border:"none",
+          background:DB.ink,color:"#fff",fontSize:15,fontWeight:600,fontFamily:DB.sans,
+          cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,letterSpacing:0.1}}>
+          Set up your journal <Ic name="arrow" size={16} color="#fff" sw={1.8}/>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add / Edit Baby ───────────────────────────────────────────────
+function AddBabyScreen(props) {
+  var initial=props.initial, onSave=props.onSave, onBack=props.onBack, onDelete=props.onDelete;
+  const [name,setName]=useState(initial?initial.name:"");
+  const [dob,setDob]=useState(initial?initial.dob:"");
+  const [gender,setGender]=useState(initial?initial.gender:"");
+  const [color,setColor]=useState(initial?initial.color:BABY_COLORS[0].id);
+  const [err,setErr]=useState("");
+
+  function handleSave(){
+    if(!name.trim()){setErr("Please enter a name.");return;}
+    if(!gender){setErr("Please select a pronoun.");return;}
+    onSave({name:name.trim(),dob,gender,color});
+  }
+
+  return(
+    <div style={{minHeight:"100vh",background:DB.bg,fontFamily:DB.sans,display:"flex",flexDirection:"column"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+      {/* Top bar */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 20px 0"}}>
+        {onBack?<button onClick={onBack} style={{width:34,height:34,borderRadius:17,border:"1px solid "+DB.hairline,background:DB.paper,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:DB.ink}}><Ic name="chevL" size={16}/></button>:<span/>}
+        <div>
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",color:DB.muted,textAlign:"center"}}>New Profile</div>
+        </div>
+        <span style={{width:34}}/>
+      </div>
+      <div style={{padding:"16px 24px 0",flex:1}}>
+        <h2 style={{fontFamily:DB.serif,fontWeight:300,fontSize:36,margin:"0 0 28px",lineHeight:1.05,letterSpacing:-1,color:DB.ink}}>
+          <span style={{fontStyle:"italic",fontWeight:400,color:DB.peachDeep}}>Tell us a little</span><br/>about them.
+        </h2>
+
+        <FLabel>Name</FLabel>
+        <input value={name} onChange={function(e){setName(e.target.value);}} placeholder="Baby's name"
+          style={{width:"100%",padding:"13px 16px",borderRadius:12,border:"1px solid "+DB.hairline,fontSize:16,
+            fontFamily:DB.sans,background:DB.paper,outline:"none",boxSizing:"border-box",color:DB.ink,marginBottom:18,display:"block"}}/>
+
+        <FLabel>Date of birth</FLabel>
+        <input type="date" value={dob} onChange={function(e){setDob(e.target.value);}} max={todayStr()}
+          style={{width:"100%",padding:"13px 16px",borderRadius:12,border:"1px solid "+DB.hairline,fontSize:16,
+            fontFamily:DB.sans,background:DB.paper,outline:"none",boxSizing:"border-box",color:DB.ink,marginBottom:18,display:"block"}}/>
+
+        <FLabel>Pronoun</FLabel>
+        <div style={{display:"flex",gap:10,marginBottom:22}}>
+          {[["girl","Girl"],["boy","Boy"],["other","Other"]].map(function(pair){
+            var v=pair[0],l=pair[1];
+            var sel=gender===v;
+            return(
+              <button key={v} onClick={function(){setGender(v);}}
+                style={{flex:1,padding:"13px 8px",borderRadius:12,cursor:"pointer",
+                  border:"1px solid "+(sel?DB.ink:DB.hairline),
+                  background:sel?DB.ink:DB.paper,
+                  fontWeight:sel?600:400,fontSize:14,color:sel?"#fff":DB.ink,fontFamily:DB.sans}}>
+                {l}
+              </button>
+            );
+          })}
+        </div>
+
+        <FLabel>Profile color</FLabel>
+        <div style={{display:"flex",gap:14,marginBottom:28,flexWrap:"wrap"}}>
+          {BABY_COLORS.map(function(bc){
+            var sel=color===bc.id;
+            return(
+              <div key={bc.id} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+                <button onClick={function(){setColor(bc.id);}}
+                  style={{width:44,height:44,borderRadius:22,background:bc.accent,border:"none",cursor:"pointer",
+                    boxShadow:sel?"0 0 0 2.5px "+DB.bg+", 0 0 0 4px "+DB.ink:"none",transition:"box-shadow 0.15s"}}/>
+                <span style={{fontSize:10,color:DB.muted,fontWeight:500}}>{bc.label}</span>
+              </div>
+            );
+          })}
+        </div>
+        {err&&<p style={{color:"#c0392b",fontSize:13,margin:"0 0 12px"}}>{err}</p>}
+      </div>
+
+      <div style={{padding:"12px 24px 36px"}}>
+        <button onClick={handleSave}
+          style={{width:"100%",padding:"17px",borderRadius:100,border:"none",
+            background:DB.ink,color:"#fff",fontWeight:600,fontSize:15,fontFamily:DB.sans,cursor:"pointer",marginBottom:10}}>
+          {initial?"Save changes":"Add baby"}
+        </button>
+        {onDelete&&(
+          <button onClick={function(){if(confirm("Delete this baby's profile and all data?"))onDelete();}}
+            style={{width:"100%",padding:"14px",borderRadius:100,border:"1px solid "+DB.hairline,
+              background:"transparent",color:DB.ink2,fontSize:14,fontFamily:DB.sans,cursor:"pointer"}}>
+            Delete profile
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+function FLabel(props){return <div style={{fontSize:11,color:DB.muted,fontWeight:600,letterSpacing:0.3,marginBottom:8}}>{props.children}</div>;}
+
+// ─── Main Content ──────────────────────────────────────────────────
+function MainContent(props) {
+  var baby=props.baby, color=props.color, selectedDate=props.selectedDate,
+      setSelectedDate=props.setSelectedDate, dayData=props.dayData, setDayData=props.setDayData;
+  const isToday=selectedDate===todayStr();
+  const calc=calcDay(dayData);
+  const liveStatus=getLiveStatus(dayData,isToday);
+  var status=liveStatus.status, duration=liveStatus.duration;
+  const nextField=getNextField(dayData);
+  const ageStr=getAge(baby.dob);
+  const hasData=Object.values(dayData).some(function(v){return v&&typeof v==="string"&&v.match(/\d/);});
+
+  return(
+    <div style={{maxWidth:520,margin:"0 auto",paddingBottom:60}}>
+      {/* Date header */}
+      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",padding:"20px 20px 0"}}>
+        <h2 style={{fontFamily:DB.serif,fontWeight:400,fontSize:30,margin:0,letterSpacing:-0.8,color:DB.ink}}>
+          {fmtDateLong(selectedDate)}
+        </h2>
+        <div style={{display:"flex",gap:4,flexShrink:0,marginLeft:8}}>
+          <NavBtn onClick={function(){shiftDate(selectedDate,-1,setSelectedDate);}}><Ic name="chevL" size={13}/></NavBtn>
+          <NavBtn onClick={function(){shiftDate(selectedDate,1,setSelectedDate);}} dim={isToday}><Ic name="chevR" size={13}/></NavBtn>
+        </div>
+      </div>
+
+      {/* Baby card */}
+      <div style={{margin:"14px 20px 0",padding:"16px 18px",borderRadius:18,background:DB.paper,border:"1px solid "+DB.hairline}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <BabyAvatar name={baby.name} accent={color.accent} size={40}/>
+          <div>
+            <div style={{fontSize:17,fontWeight:600,color:DB.ink,fontFamily:DB.sans}}>{baby.name}</div>
+            {ageStr&&<div style={{fontSize:12,color:DB.muted,marginTop:1}}>{ageStr}</div>}
+          </div>
+        </div>
+        {/* Status line */}
+        <div style={{marginTop:12,padding:"10px 14px",borderRadius:12,background:DB.bg,
+          display:"flex",alignItems:"center",gap:10}}>
+          <Ic name={status==="sleeping"?"moon":"sun"} size={14} color={DB.muted}/>
+          <span style={{fontSize:14,color:DB.ink2}}>
+            {status==="unknown"&&(isToday?"Nothing logged yet.":"No data for this day.")}
+            {status==="complete"&&"Day logged — see summary below."}
+            {status==="night"&&"Night sleep recorded."}
+            {(status==="sleeping"||status==="awake")&&(
+              status==="sleeping"
+                ?baby.name+" is sleeping · "+fmtDurLong(duration)
+                :baby.name+" is awake · "+fmtDurLong(duration)
+            )}
+          </span>
+        </div>
+      </div>
+
+      {/* Quick log */}
+      {isToday&&nextField&&!dayData[nextField]&&(
+        <div style={{margin:"12px 20px 0"}}>
+          <button onClick={function(){setDayData({[nextField]:nowHHMM()});}}
+            style={{width:"100%",padding:"15px 18px",borderRadius:16,border:"none",
+              background:DB.ink,color:"#fff",fontWeight:600,fontSize:15,fontFamily:DB.sans,cursor:"pointer",
+              display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+            <Ic name={SLEEP_KEYS.has(nextField)&&nextField!=="wakeNight"?"moon":"sun"} size={16} color="#fff"/>
+            {FIELD_LABELS[nextField]}
+            <span style={{fontSize:12,opacity:0.6,marginLeft:2}}>{nowHHMM()}</span>
+          </button>
+        </div>
+      )}
+      {isToday&&!dayData.nightSleep&&nextField!=="nightSleep"&&(
+        <div style={{margin:"8px 20px 0"}}>
+          <button onClick={function(){setDayData({nightSleep:nowHHMM()});}}
+            style={{width:"100%",padding:"12px 18px",borderRadius:16,
+              border:"1.5px dashed "+DB.peach,background:"transparent",
+              color:DB.peachDeep,fontWeight:600,fontSize:14,fontFamily:DB.sans,cursor:"pointer",
+              display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            <Ic name="moon" size={14} color={DB.peachDeep}/>Start night sleep · {nowHHMM()}
+          </button>
+        </div>
+      )}
+
+      {/* Day log */}
+      <div style={{margin:"16px 20px 0",background:DB.paper,borderRadius:18,border:"1px solid "+DB.hairline,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",padding:"16px 18px 12px",borderBottom:"1px solid "+DB.hairline}}>
+          <span style={{fontFamily:DB.serif,fontWeight:400,fontSize:22,color:DB.ink,letterSpacing:-0.4}}>Day log</span>
+          <span style={{fontSize:11,color:DB.muted}}>tap a time to edit</span>
+        </div>
+        <DayLogEditor dayData={dayData} setDayData={setDayData} color={color} calc={calc}/>
+      </div>
+
+      {/* Summary */}
+      {hasData&&<CalcSummary calc={calc} dayData={dayData} color={color}/>}
+    </div>
+  );
+}
+
+function NavBtn(props){
+  return(
+    <button onClick={props.dim?undefined:props.onClick}
+      style={{width:28,height:28,borderRadius:14,border:"1px solid "+DB.hairline,background:DB.paper,
+        color:props.dim?DB.hairline:DB.ink2,display:"flex",alignItems:"center",justifyContent:"center",cursor:props.dim?"default":"pointer"}}>
+      {props.children}
+    </button>
+  );
+}
+
+// ─── Day Log Editor ────────────────────────────────────────────────
+function DayLogEditor(props) {
+  var dayData=props.dayData, setDayData=props.setDayData, color=props.color, calc=props.calc;
+  const visible=getVisibleFields(dayData);
+
+  return(
+    <div style={{padding:"6px 0 12px"}}>
+      {visible.map(function(key){
+        const isSleep=SLEEP_KEYS.has(key)&&key!=="wakeNight";
+        const val=dayData[key]||"";
+        const hasVal=!!val;
+        const icon=FIELD_ICONS[key]||"sun";
+        // nap duration hint
+        const napMap={sleep1:"n1",sleep2:"n2",sleep3:"n3",sleep4:"n4",sleep5:"n5"};
+        const durKey=napMap[key];
+        const napDur=durKey&&calc&&calc[durKey]?fmtDur(calc[durKey]):null;
+
+        return(
+          <div key={key} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 18px",
+            background:isSleep&&hasVal?"#F5EFF4":"transparent",
+            borderBottom:"1px solid "+DB.hairline}}>
+            {/* icon */}
+            <span style={{width:20,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Ic name={icon} size={14} color={hasVal?(isSleep?DB.night:DB.peachDeep):DB.muted}/>
+            </span>
+            {/* label */}
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,color:hasVal?DB.ink:DB.muted,fontWeight:hasVal?500:400}}>
+                {FIELD_LABELS[key]}
+              </div>
+              {napDur&&<div style={{fontSize:11,color:DB.muted,marginTop:1}}>{napDur}</div>}
+            </div>
+            {/* time input or Set time button */}
+            {hasVal?(
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <input type="time" value={val} onChange={function(e){setDayData({[key]:e.target.value||null});}}
+                  style={{padding:"5px 12px",borderRadius:100,
+                    border:"1.5px solid "+(isSleep?DB.night:DB.hairline),
+                    fontSize:13,fontWeight:700,color:DB.ink,background:isSleep?"#EDE5EC":"#fff",
+                    outline:"none",width:92,fontFamily:DB.sans}}/>
+                <button onClick={function(){setDayData({[key]:null});}}
+                  style={{width:24,height:24,borderRadius:12,border:"none",background:DB.hairline,
+                    color:DB.muted,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+              </div>
+            ):(
+              <button onClick={function(){setDayData({[key]:nowHHMM()});}}
+                style={{padding:"5px 14px",borderRadius:100,border:"1.5px solid "+DB.peachSoft,
+                  background:DB.peachSoft,fontSize:12,fontWeight:600,color:DB.peachDeep,
+                  fontFamily:DB.sans,cursor:"pointer",whiteSpace:"nowrap"}}>
+                Set time
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {/* Notes */}
+      <div style={{padding:"10px 18px 4px"}}>
+        <textarea value={dayData.comments||""} onChange={function(e){setDayData({comments:e.target.value});}}
+          placeholder="Notes for the day…" rows={2}
+          style={{width:"100%",padding:"10px 14px",borderRadius:12,border:"1px solid "+DB.hairline,
+            fontSize:13,fontFamily:DB.serif,fontStyle:"italic",background:DB.bg,resize:"none",
+            outline:"none",boxSizing:"border-box",color:DB.ink2,lineHeight:1.5}}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── Summary ───────────────────────────────────────────────────────
+function CalcSummary(props) {
+  var calc=props.calc, color=props.color;
+  const rows=[
+    ["Last awake window", calc.awLast],
+    ["Total awake time",  calc.awakeTotal],
+    ["Nap sleep",         calc.sleepDay],
+    ["Night sleep",       calc.sleepNight],
+    ["Total sleep",       calc.sleepTotal],
+  ].filter(function(r){return r[1]!==null&&r[1]!==undefined;});
+  if(!rows.length)return null;
+  return(
+    <div style={{margin:"12px 20px 0",background:DB.paper,borderRadius:18,border:"1px solid "+DB.hairline,overflow:"hidden"}}>
+      <div style={{padding:"14px 18px 10px",borderBottom:"1px solid "+DB.hairline}}>
+        <span style={{fontFamily:DB.serif,fontWeight:400,fontSize:18,color:DB.ink,letterSpacing:-0.3}}>Today's summary</span>
+      </div>
+      {rows.map(function(r){
+        var label=r[0], val=r[1];
+        var isTotal=label==="Total sleep";
+        return(
+          <div key={label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+            padding:"11px 18px",borderBottom:"1px solid "+DB.hairline,
+            background:isTotal?DB.peachSoft+"55":"transparent"}}>
+            <span style={{fontSize:14,color:DB.ink2,fontWeight:isTotal?600:400}}>{label}</span>
+            <span style={{fontSize:isTotal?17:14,fontWeight:700,color:isTotal?DB.peachDeep:DB.ink,
+              fontFamily:isTotal?DB.serif:DB.sans,letterSpacing:isTotal?-0.3:0}}>{fmtDur(val)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Reports ───────────────────────────────────────────────────────
+function ReportsScreen(props) {
+  var baby=props.baby, onBack=props.onBack;
+  const [period,setPeriod]=useState(7);
+  const color=BABY_COLORS.find(function(c){return c.id===baby.color;})||BABY_COLORS[0];
+  const presets=[[7,"1 week"],[14,"2 weeks"],[30,"1 month"]];
+
+  const dates=getDatesBack(period);
+  const rows=dates.map(function(d){
+    const day=(baby.days&&baby.days[d])||{};
+    const c=calcDay(day);
+    return Object.assign({date:d},c);
+  }).filter(function(r){return r.sleepTotal!==null||r.awakeTotal!==null;});
+
+  function avg(key){
+    const vals=rows.map(function(r){return r[key];}).filter(function(v){return v!==null&&v!==undefined;});
+    if(!vals.length)return null;
+    return Math.round(vals.reduce(function(a,b){return a+b;},0)/vals.length);
+  }
+
+  return(
+    <div style={{minHeight:"100vh",background:DB.bg,fontFamily:DB.sans,color:DB.ink}}>
+      <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 20px 10px",
+        borderBottom:"1px solid "+DB.hairline,position:"sticky",top:0,background:DB.bg+"f8",backdropFilter:"blur(10px)",zIndex:50}}>
+        <button onClick={onBack} style={{width:34,height:34,borderRadius:17,border:"1px solid "+DB.hairline,
+          background:DB.paper,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:DB.ink}}>
+          <Ic name="chevL" size={16}/>
+        </button>
+        <div style={{flex:1}}>
+          <div style={{fontSize:11,color:DB.muted,fontWeight:600}}>{baby.name} · {getAge(baby.dob)}</div>
+          <div style={{fontFamily:DB.serif,fontWeight:400,fontSize:20,letterSpacing:-0.5,color:DB.ink}}>
+            <span style={{fontStyle:"italic",color:DB.peachDeep}}>Rhythm,</span> last {period} days
+          </div>
+        </div>
+        <BabyAvatar name={baby.name} accent={color.accent} size={34}/>
+      </div>
+
+      <div style={{padding:"16px 20px 60px"}}>
+        {/* Period tabs */}
+        <div style={{display:"flex",gap:6,marginBottom:18,background:DB.paper,padding:4,borderRadius:12,border:"1px solid "+DB.hairline}}>
+          {presets.map(function(pair){
+            var v=pair[0],l=pair[1];
+            var sel=period===v;
+            return(
+              <button key={v} onClick={function(){setPeriod(v);}}
+                style={{flex:1,padding:"8px 0",borderRadius:9,border:"none",
+                  background:sel?DB.ink:"transparent",color:sel?"#fff":DB.muted,
+                  fontSize:12,fontWeight:600,fontFamily:DB.sans,cursor:"pointer"}}>
+                {l}
+              </button>
+            );
+          })}
+        </div>
+
+        {rows.length===0?(
+          <div style={{textAlign:"center",color:DB.muted,padding:"48px 0",fontSize:15}}>No data for this period yet.</div>
+        ):(
+          <>
+            {/* Averages card */}
+            <div style={{background:DB.paper,borderRadius:18,border:"1px solid "+DB.hairline,overflow:"hidden",marginBottom:16}}>
+              <div style={{padding:"14px 18px 8px",borderBottom:"1px solid "+DB.hairline}}>
+                <div style={{fontSize:10,letterSpacing:1.2,textTransform:"uppercase",fontWeight:700,color:DB.muted}}>
+                  Averages · {rows.length} days with data
+                </div>
+              </div>
+              {[["Last awake window","awLast"],["Total awake time","awakeTotal"],["Nap sleep","sleepDay"],["Night sleep","sleepNight"],["Total sleep","sleepTotal"]].map(function(pair){
+                var label=pair[0],key=pair[1];
+                var val=avg(key);
+                if(val===null)return null;
+                var isTotal=key==="sleepTotal";
+                return(
+                  <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                    padding:"11px 18px",borderBottom:"1px solid "+DB.hairline}}>
+                    <span style={{fontSize:14,color:DB.ink2}}>{label}</span>
+                    <span style={{fontSize:isTotal?16:14,fontWeight:700,color:isTotal?DB.peachDeep:DB.ink,
+                      fontFamily:isTotal?DB.serif:DB.sans,letterSpacing:isTotal?-0.3:0}}>{fmtDur(val)}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Day by day */}
+            <div style={{background:DB.paper,borderRadius:18,border:"1px solid "+DB.hairline,overflow:"hidden"}}>
+              <div style={{padding:"14px 18px 8px",borderBottom:"1px solid "+DB.hairline}}>
+                <div style={{fontSize:10,letterSpacing:1.2,textTransform:"uppercase",fontWeight:700,color:DB.muted}}>Day by day</div>
+              </div>
+              {rows.map(function(r){
+                const d=new Date(r.date+"T12:00:00");
+                const dayLabel=d.toLocaleDateString("en-GB",{weekday:"short",month:"short",day:"numeric"});
+                const chips=[
+                  r.sleepDay!==null&&{label:"Naps",val:fmtDur(r.sleepDay),total:false},
+                  r.sleepNight!==null&&{label:"Night",val:fmtDur(r.sleepNight),total:false},
+                  r.sleepTotal!==null&&{label:"Total sleep",val:fmtDur(r.sleepTotal),total:true},
+                  r.awakeTotal!==null&&{label:"Awake",val:fmtDur(r.awakeTotal),total:false},
+                ].filter(Boolean);
+                return(
+                  <div key={r.date} style={{padding:"12px 18px",borderBottom:"1px solid "+DB.hairline}}>
+                    <div style={{fontSize:12,color:DB.muted,marginBottom:8,fontWeight:500}}>{dayLabel}</div>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      {chips.map(function(chip){return(
+                        <div key={chip.label} style={{padding:"5px 12px",borderRadius:100,
+                          background:chip.total?DB.peachSoft:"#F5F1EE",
+                          fontSize:12,fontWeight:chip.total?700:500,
+                          color:chip.total?DB.peachDeep:DB.ink2}}>
+                          {chip.label} <span style={{fontWeight:700,color:chip.total?DB.peachDeep:DB.ink}}>{chip.val}</span>
+                        </div>
+                      );})}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
