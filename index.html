@@ -652,9 +652,22 @@ function DayLogEditor(props) {
   var sleepInputBg=color?color.sleepInputBg:"#EDE5EC";
   const visible=getVisibleFields(dayData);
 
+  // Find the previous filled field's time, to validate ordering (UI-only check, no logic change)
+  function getPrevFilledMin(idx){
+    for(var j=idx-1;j>=0;j--){
+      var pk=visible[j];
+      var pv=dayData[pk];
+      if(pv){
+        var pm=timeToMin(pv);
+        if(pm!==null)return {min:pm,key:pk};
+      }
+    }
+    return null;
+  }
+
   return(
     <div style={{padding:"6px 0 12px"}}>
-      {visible.map(function(key){
+      {visible.map(function(key,idx){
         const isSleep=SLEEP_KEYS.has(key)&&key!=="wakeNight";
         const val=dayData[key]||"";
         const hasVal=!!val;
@@ -664,40 +677,59 @@ function DayLogEditor(props) {
         const durKey=napMap[key];
         const napDur=durKey&&calc&&calc[durKey]?fmtDur(calc[durKey]):null;
 
+        // Out-of-order check: current value must be after the previous filled field
+        // (nightSleep is allowed to be "smaller" since it usually wraps past midnight conceptually,
+        // but within the same day log entry sequence it should still come after the last evening field)
+        var outOfOrder=false;
+        if(hasVal){
+          var curMin=timeToMin(val);
+          var prevInfo=getPrevFilledMin(idx);
+          if(prevInfo!==null&&curMin!==null){
+            if(curMin<=prevInfo.min){
+              outOfOrder=true;
+            }
+          }
+        }
+
         return(
           <div key={key} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 18px",
-            background:isSleep&&hasVal?sleepBg:"transparent",
+            background:isSleep&&hasVal&&!outOfOrder?sleepBg:outOfOrder?"#FBEAE8":"transparent",
             borderBottom:"1px solid "+DB.hairline}}>
             {/* icon */}
             <span style={{width:20,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <Ic name={icon} size={14} color={hasVal?(isSleep?accentDeep:accentDeep):DB.muted}/>
+              <Ic name={outOfOrder?"sun":icon} size={14} color={outOfOrder?"#C0392B":(hasVal?accentDeep:DB.muted)}/>
             </span>
             {/* label */}
             <div style={{flex:1}}>
               <div style={{fontSize:14,color:hasVal?DB.ink:DB.muted,fontWeight:hasVal?500:400}}>
                 {FIELD_LABELS[key]}
               </div>
-              {napDur&&<div style={{fontSize:11,color:DB.muted,marginTop:1}}>{napDur}</div>}
+              {napDur&&!outOfOrder&&<div style={{fontSize:11,color:DB.muted,marginTop:1}}>{napDur}</div>}
+              {outOfOrder&&<div style={{fontSize:11,color:"#C0392B",marginTop:1,fontWeight:600}}>Earlier than previous time</div>}
             </div>
             {/* time input or Set time button */}
             {hasVal?(
               <div style={{display:"flex",alignItems:"center",gap:6}}>
                 <input type="time" value={val} onChange={function(e){setDayData({[key]:e.target.value||null});}}
                   style={{padding:"5px 12px",borderRadius:100,
-                    border:"1.5px solid "+(isSleep?sleepBorder:DB.hairline),
-                    fontSize:13,fontWeight:700,color:DB.ink,background:isSleep?sleepInputBg:"#fff",
+                    border:"1.5px solid "+(outOfOrder?"#C0392B":(isSleep?sleepBorder:DB.hairline)),
+                    fontSize:13,fontWeight:700,color:DB.ink,background:outOfOrder?"#fff":(isSleep?sleepInputBg:"#fff"),
                     outline:"none",width:92,fontFamily:DB.sans}}/>
                 <button onClick={function(){setDayData({[key]:null});}}
                   style={{width:24,height:24,borderRadius:12,border:"none",background:DB.hairline,
                     color:DB.muted,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
               </div>
             ):(
-              <button onClick={function(){setDayData({[key]:nowHHMM()});}}
-                style={{padding:"5px 14px",borderRadius:100,border:"1.5px solid "+accentSoft,
-                  background:accentSoft,fontSize:12,fontWeight:600,color:accentDeep,
-                  fontFamily:DB.sans,cursor:"pointer",whiteSpace:"nowrap"}}>
-                Set time
-              </button>
+              <div style={{position:"relative",width:92,height:30}}>
+                <input type="time" value="" onChange={function(e){if(e.target.value)setDayData({[key]:e.target.value});}}
+                  style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer",zIndex:2}}/>
+                <div style={{position:"absolute",inset:0,padding:"5px 14px",borderRadius:100,
+                  border:"1.5px solid "+accentSoft,background:accentSoft,fontSize:12,fontWeight:600,
+                  color:accentDeep,fontFamily:DB.sans,display:"flex",alignItems:"center",justifyContent:"center",
+                  whiteSpace:"nowrap",pointerEvents:"none",zIndex:1}}>
+                  Set time
+                </div>
+              </div>
             )}
           </div>
         );
