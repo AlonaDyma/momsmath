@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
-<meta name="apple-mobile-web-app-title" content="Moms' Math"/>
-<title>Moms' Math</title>
+<meta name="apple-mobile-web-app-title" content="moms' math"/>
+<title>moms' math</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23F2D0BC'/%3E%3Cstop offset='55%25' stop-color='%23E1A089'/%3E%3Cstop offset='100%25' stop-color='%23BF7958'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1024' height='1024' rx='230' fill='url(%23g)'/%3E%3Ccircle cx='720' cy='200' r='80' fill='%23FFF6EC' opacity='0.9'/%3E%3Ctext x='512' y='750' font-family='Georgia,serif' font-size='580' font-weight='400' fill='%23FFF6EC' text-anchor='middle'%3Em%3C/text%3E%3C/svg%3E"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23E1A089'/%3E%3Ccircle cx='72' cy='22' r='9' fill='%23FFF6EC'/%3E%3Ctext x='50' y='76' font-family='Georgia,serif' font-size='58' fill='%23FFF6EC' text-anchor='middle'%3Em%3C/text%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
@@ -43,6 +45,7 @@ const DB = {
   ink2:        "#57534E",
   muted:       "#A8A29E",
   hairline:    "#E7E0D8",
+  hairlineSoft: "#F4ECE0",
   peach:       "#E1A089",
   peachDeep:   "#BF7958",
   peachSoft:   "#F5E6DE",
@@ -554,15 +557,22 @@ function MainContent(props) {
 
   return(
     <div style={{maxWidth:520,margin:"0 auto",paddingBottom:80,width:"100%",boxSizing:"border-box"}}>
-      {/* Date header */}
-      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",padding:"20px 20px 0"}}>
-        <h2 style={{fontFamily:DB.serif,fontWeight:400,fontSize:26,margin:0,letterSpacing:-0.5,color:DB.ink,lineHeight:1.1}}>
-          {fmtDateLong(selectedDate)}
-        </h2>
-        <div style={{display:"flex",gap:4,flexShrink:0,marginLeft:8}}>
-          <NavBtn onClick={function(){shiftDate(selectedDate,-1,setSelectedDate);}}><Ic name="chevL" size={13}/></NavBtn>
-          <NavBtn onClick={function(){shiftDate(selectedDate,1,setSelectedDate);}} dim={isToday}><Ic name="chevR" size={13}/></NavBtn>
+      {/* Date header with calendar picker */}
+      <div style={{display:"flex",alignItems:"center",gap:6,padding:"16px 20px 0"}}>
+        <NavBtn onClick={function(){shiftDate(selectedDate,-1,setSelectedDate);}}><Ic name="chevL" size={13}/></NavBtn>
+        <div style={{flex:1,position:"relative",display:"flex",justifyContent:"center"}}>
+          <h2 style={{fontFamily:DB.serif,fontWeight:400,fontSize:24,margin:0,
+            letterSpacing:-0.5,color:DB.ink,lineHeight:1.1,textAlign:"center",
+            cursor:"pointer",userSelect:"none"}}>
+            {fmtDateLong(selectedDate)}
+            <span style={{fontSize:12,color:DB.muted,display:"block",fontFamily:DB.sans,
+              fontWeight:400,marginTop:1,letterSpacing:0}}>tap to pick date</span>
+          </h2>
+          <input type="date" value={selectedDate} max={todayStr()}
+            onChange={function(e){if(e.target.value&&e.target.value<=todayStr())setSelectedDate(e.target.value);}}
+            style={{position:"absolute",inset:0,opacity:0,cursor:"pointer",width:"100%",height:"100%",zIndex:2}}/>
         </div>
+        <NavBtn onClick={function(){shiftDate(selectedDate,1,setSelectedDate);}} dim={isToday}><Ic name="chevR" size={13}/></NavBtn>
       </div>
 
       {/* Baby card */}
@@ -570,15 +580,15 @@ function MainContent(props) {
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <BabyAvatar name={baby.name} accent={color.accent} size={40}/>
           <div>
-            <div style={{fontSize:17,fontWeight:600,color:DB.ink,fontFamily:DB.sans}}>{baby.name}</div>
-            {ageStr&&<div style={{fontSize:12,color:DB.muted,marginTop:1}}>{ageStr}</div>}
+            <div style={{fontSize:19,fontWeight:600,color:DB.ink,fontFamily:DB.sans}}>{baby.name}</div>
+            {ageStr&&<div style={{fontSize:14,color:DB.muted,marginTop:2}}>{ageStr}</div>}
           </div>
         </div>
         {/* Status line */}
         <div style={{marginTop:12,padding:"10px 14px",borderRadius:12,background:DB.bg,
           display:"flex",alignItems:"center",gap:10}}>
           <Ic name={status==="sleeping"?"moon":"sun"} size={14} color={DB.muted}/>
-          <span style={{fontSize:14,color:DB.ink2}}>
+          <span style={{fontSize:15,color:DB.ink2}}>
             {status==="unknown"&&(isToday?"Nothing logged yet.":"No data for this day.")}
             {status==="complete"&&"Day logged — see summary below."}
             {status==="night"&&"Night sleep recorded."}
@@ -598,7 +608,7 @@ function MainContent(props) {
             style={{width:"100%",padding:"15px 18px",borderRadius:16,border:"none",
               background:DB.ink,color:"#fff",fontWeight:600,fontSize:15,fontFamily:DB.sans,cursor:"pointer",
               display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
-            <Ic name={SLEEP_KEYS.has(nextField)&&nextField!=="wakeNight"?"moon":"sun"} size={16} color="#fff"/>
+            <Ic name={SLEEP_KEYS.has(nextField)&&nextField!=="wakeNight"?"moon":"sun"} size={18} color="#fff"/>
             {FIELD_LABELS[nextField]}
             <span style={{fontSize:12,opacity:0.6,marginLeft:2}}>{nowHHMM()}</span>
           </button>
@@ -619,8 +629,8 @@ function MainContent(props) {
       {/* Day log */}
       <div style={{margin:"16px 20px 0",background:DB.paper,borderRadius:18,border:"1px solid "+DB.hairline,overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",padding:"16px 18px 12px",borderBottom:"1px solid "+DB.hairline}}>
-          <span style={{fontFamily:DB.serif,fontWeight:400,fontSize:22,color:DB.ink,letterSpacing:-0.4}}>Day log</span>
-          <span style={{fontSize:11,color:DB.muted}}>tap a time to edit</span>
+          <span style={{fontFamily:DB.serif,fontWeight:400,fontSize:26,color:DB.ink,letterSpacing:-0.5}}>Day log</span>
+          <span style={{fontSize:12,color:DB.muted}}>tap a time to edit</span>
         </div>
         <DayLogEditor dayData={dayData} setDayData={setDayData} color={color} calc={calc}/>
       </div>
@@ -692,7 +702,7 @@ function DayLogEditor(props) {
         }
 
         return(
-          <div key={key} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 18px",
+          <div key={key} style={{display:"flex",alignItems:"center",gap:12,padding:"14px 18px",
             background:isSleep&&hasVal&&!outOfOrder?sleepBg:outOfOrder?"#FBEAE8":"transparent",
             borderBottom:"1px solid "+DB.hairline}}>
             {/* icon */}
@@ -701,30 +711,30 @@ function DayLogEditor(props) {
             </span>
             {/* label */}
             <div style={{flex:1}}>
-              <div style={{fontSize:14,color:hasVal?DB.ink:DB.muted,fontWeight:hasVal?500:400}}>
+              <div style={{fontSize:16,color:hasVal?DB.ink:DB.muted,fontWeight:hasVal?500:400}}>
                 {FIELD_LABELS[key]}
               </div>
-              {napDur&&!outOfOrder&&<div style={{fontSize:11,color:DB.muted,marginTop:1}}>{napDur}</div>}
-              {outOfOrder&&<div style={{fontSize:11,color:"#C0392B",marginTop:1,fontWeight:600}}>Earlier than previous time</div>}
+              {napDur&&!outOfOrder&&<div style={{fontSize:13,color:DB.muted,marginTop:2}}>{napDur}</div>}
+              {outOfOrder&&<div style={{fontSize:13,color:"#C0392B",marginTop:2,fontWeight:600}}>Earlier than previous time</div>}
             </div>
             {/* time input or Set time button */}
             {hasVal?(
               <div style={{display:"flex",alignItems:"center",gap:6}}>
                 <input type="time" value={val} onChange={function(e){setDayData({[key]:e.target.value||null});}}
-                  style={{padding:"5px 12px",borderRadius:100,
+                  style={{padding:"8px 14px",borderRadius:100,
                     border:"1.5px solid "+(outOfOrder?"#C0392B":(isSleep?sleepBorder:DB.hairline)),
-                    fontSize:13,fontWeight:700,color:DB.ink,background:outOfOrder?"#fff":(isSleep?sleepInputBg:"#fff"),
-                    outline:"none",width:92,fontFamily:DB.sans}}/>
+                    fontSize:16,fontWeight:700,color:DB.ink,background:outOfOrder?"#fff":(isSleep?sleepInputBg:"#fff"),
+                    outline:"none",width:104,fontFamily:DB.sans}}/>
                 <button onClick={function(){setDayData({[key]:null});}}
-                  style={{width:24,height:24,borderRadius:12,border:"none",background:DB.hairline,
-                    color:DB.muted,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+                  style={{width:30,height:30,borderRadius:15,border:"none",background:DB.hairline,
+                    color:DB.muted,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
               </div>
             ):(
-              <div style={{position:"relative",width:92,height:30}}>
+              <div style={{position:"relative",width:108,height:38}}>
                 <input type="time" value="" onChange={function(e){if(e.target.value)setDayData({[key]:e.target.value});}}
                   style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer",zIndex:2}}/>
-                <div style={{position:"absolute",inset:0,padding:"5px 14px",borderRadius:100,
-                  border:"1.5px solid "+accentSoft,background:accentSoft,fontSize:12,fontWeight:600,
+                <div style={{position:"absolute",inset:0,padding:"8px 16px",borderRadius:100,
+                  border:"1.5px solid "+accentSoft,background:accentSoft,fontSize:14,fontWeight:600,
                   color:accentDeep,fontFamily:DB.sans,display:"flex",alignItems:"center",justifyContent:"center",
                   whiteSpace:"nowrap",pointerEvents:"none",zIndex:1}}>
                   Set time
@@ -738,8 +748,8 @@ function DayLogEditor(props) {
       <div style={{padding:"10px 18px 4px"}}>
         <textarea value={dayData.comments||""} onChange={function(e){setDayData({comments:e.target.value});}}
           placeholder="Notes for the day…" rows={2}
-          style={{width:"100%",padding:"10px 14px",borderRadius:12,border:"1px solid "+DB.hairline,
-            fontSize:13,fontFamily:DB.serif,fontStyle:"italic",background:DB.bg,resize:"none",
+          style={{width:"100%",padding:"12px 14px",borderRadius:12,border:"1px solid "+DB.hairline,
+            fontSize:15,fontFamily:DB.serif,fontStyle:"italic",background:DB.bg,resize:"none",
             outline:"none",boxSizing:"border-box",color:DB.ink2,lineHeight:1.5}}/>
       </div>
     </div>
@@ -751,29 +761,60 @@ function CalcSummary(props) {
   var calc=props.calc, color=props.color;
   var accentDeep=color?color.deep:DB.peachDeep;
   var accentSoft=color?color.soft:DB.peachSoft;
+  var nightColor=color?color.deep:"#7B5E7A";
+  var nightSoft=color?color.soft:"#EDE5EC";
+
+  // type: "night" | "nap" | "awake" | "total"
   const rows=[
-    ["Last awake window", calc.awLast],
-    ["Total awake time",  calc.awakeTotal],
-    ["Nap sleep",         calc.sleepDay],
-    ["Night sleep",       calc.sleepNight],
-    ["Total sleep",       calc.sleepTotal],
-  ].filter(function(r){return r[1]!==null&&r[1]!==undefined;});
+    {label:"Night sleep",       val:calc.sleepNight, type:"night"},
+    {label:"Nap sleep",         val:calc.sleepDay,   type:"nap"},
+    {label:"Last awake window", val:calc.awLast,     type:"awake"},
+    {label:"Total awake time",  val:calc.awakeTotal, type:"awake"},
+    {label:"Total sleep",       val:calc.sleepTotal, type:"total"},
+  ].filter(function(r){return r.val!==null&&r.val!==undefined;});
+
   if(!rows.length)return null;
+
+  function rowStyle(type){
+    if(type==="night") return nightSoft;
+    if(type==="nap")   return accentSoft;
+    if(type==="total") return accentSoft;
+    return "transparent";
+  }
+  function dotColor(type){
+    if(type==="night") return nightColor;
+    if(type==="nap")   return color?color.accent:DB.peach;
+    if(type==="awake") return DB.hairline;
+    return null;
+  }
+  function valColor(type){
+    if(type==="total") return accentDeep;
+    if(type==="night") return nightColor;
+    if(type==="nap")   return accentDeep;
+    return DB.ink;
+  }
+
   return(
     <div style={{margin:"12px 20px 0",background:DB.paper,borderRadius:18,border:"1px solid "+DB.hairline,overflow:"hidden"}}>
       <div style={{padding:"14px 18px 10px",borderBottom:"1px solid "+DB.hairline}}>
         <span style={{fontFamily:DB.serif,fontWeight:400,fontSize:18,color:DB.ink,letterSpacing:-0.3}}>Today's summary</span>
       </div>
       {rows.map(function(r){
-        var label=r[0], val=r[1];
-        var isTotal=label==="Total sleep";
+        var isTotal=r.type==="total";
+        var dot=dotColor(r.type);
         return(
-          <div key={label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-            padding:"11px 18px",borderBottom:"1px solid "+DB.hairline,
-            background:isTotal?accentSoft+"55":"transparent"}}>
-            <span style={{fontSize:14,color:DB.ink2,fontWeight:isTotal?600:400}}>{label}</span>
-            <span style={{fontSize:isTotal?17:14,fontWeight:700,color:isTotal?accentDeep:DB.ink,
-              fontFamily:isTotal?DB.serif:DB.sans,letterSpacing:isTotal?-0.3:0}}>{fmtDur(val)}</span>
+          <div key={r.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+            padding:"14px 18px",borderBottom:"1px solid "+DB.hairline,
+            background:rowStyle(r.type)}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {dot&&<div style={{width:8,height:8,borderRadius:2,background:dot,flexShrink:0}}/>}
+              {!dot&&<div style={{width:8,flexShrink:0}}/>}
+              <span style={{fontSize:16,color:DB.ink2,fontWeight:isTotal?600:400}}>{r.label}</span>
+            </div>
+            <span style={{fontSize:isTotal?20:16,fontWeight:700,color:valColor(r.type),
+              fontFamily:isTotal?DB.serif:DB.sans,letterSpacing:isTotal?-0.3:0}}>
+              {fmtDur(r.val)}
+            </span>
           </div>
         );
       })}
@@ -784,24 +825,39 @@ function CalcSummary(props) {
 // ─── Reports ───────────────────────────────────────────────────────
 function ReportsScreen(props) {
   var baby=props.baby, onBack=props.onBack;
-  const [period,setPeriod]=useState(7);
+  const [period,setPeriod]=useState(7); // null = all available data
   const color=BABY_COLORS.find(function(c){return c.id===baby.color;})||BABY_COLORS[0];
   var accentDeep=color.deep;
   var accentSoft=color.soft;
-  const presets=[[7,"1 week"],[14,"2 weeks"],[30,"1 month"]];
+  var nightColor=color.deep;
+  var nightSoftColor=color.soft;
+  const presets=[[7,"Week"],[14,"2 wks"],[30,"Month"],[90,"3 mo"]];
 
-  const dates=getDatesBack(period);
+  // null period = show all days that have data (up to 180 days back)
+  var effectivePeriod=period||180;
+  const dates=getDatesBack(effectivePeriod);
   const rows=dates.map(function(d){
     const day=(baby.days&&baby.days[d])||{};
     const c=calcDay(day);
-    return Object.assign({date:d},c);
-  }).filter(function(r){return r.sleepTotal!==null||r.awakeTotal!==null;});
+    const segs=buildTimelineSegs(day);
+    const hasData=Object.values(day).some(function(v){return v&&typeof v==="string"&&v.match(/\d/);});
+    return Object.assign({date:d,segs:segs,hasData:hasData,day:day},c);
+  });
 
+  const dataRows=rows.filter(function(r){return r.hasData;});
   function avg(key){
-    const vals=rows.map(function(r){return r[key];}).filter(function(v){return v!==null&&v!==undefined;});
+    const vals=dataRows.map(function(r){return r[key];}).filter(function(v){return v!==null&&v!==undefined;});
     if(!vals.length)return null;
     return Math.round(vals.reduce(function(a,b){return a+b;},0)/vals.length);
   }
+  var avgNight=avg("sleepNight");
+  var avgNaps=avg("sleepDay");
+  var avgAwake=avg("awakeTotal");
+  // Total = Night + Naps so it always matches what user sees in the breakdown
+  var avgTotal=(avgNight||0)+(avgNaps||0);
+  var avgH=Math.floor(avgTotal/60);
+  var avgM=avgTotal%60;
+  var nightSoftColor="#EDE5EC";
 
   return(
     <div style={{minHeight:"100vh",minHeight:"100dvh",background:DB.bg,fontFamily:DB.sans,color:DB.ink,overflowX:"hidden"}}>
@@ -809,100 +865,282 @@ function ReportsScreen(props) {
 
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 20px 10px",
-        borderBottom:"1px solid "+DB.hairline,position:"sticky",top:0,background:DB.bg+"f8",backdropFilter:"blur(10px)",zIndex:50}}>
+        borderBottom:"1px solid "+DB.hairline,position:"sticky",top:0,
+        background:DB.bg+"f8",backdropFilter:"blur(10px)",zIndex:50}}>
         <button onClick={onBack} style={{width:34,height:34,borderRadius:17,border:"1px solid "+DB.hairline,
           background:DB.paper,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:DB.ink}}>
           <Ic name="chevL" size={16}/>
         </button>
         <div style={{flex:1}}>
-          <div style={{fontSize:11,color:DB.muted,fontWeight:600}}>{baby.name} · {getAge(baby.dob)}</div>
-          <div style={{fontFamily:DB.serif,fontWeight:400,fontSize:20,letterSpacing:-0.5,color:DB.ink}}>
-            <span style={{fontStyle:"italic",color:DB.peachDeep}}>Rhythm,</span> last {period} days
+          <div style={{fontSize:11,color:DB.muted,fontWeight:600}}>{baby.name}{getAge(baby.dob)?" · "+getAge(baby.dob):""}</div>
+          <div style={{fontFamily:DB.serif,fontWeight:400,fontSize:22,letterSpacing:-0.5,color:DB.ink,lineHeight:1.2}}>
+            <span style={{fontStyle:"italic",color:accentDeep}}>Rhythm,</span> {period?"last "+period+" days":"all time"}
           </div>
         </div>
         <BabyAvatar name={baby.name} accent={color.accent} size={34}/>
       </div>
 
-      <div style={{padding:"16px 20px 60px"}}>
-        {/* Period tabs */}
-        <div style={{display:"flex",gap:6,marginBottom:18,background:DB.paper,padding:4,borderRadius:12,border:"1px solid "+DB.hairline}}>
+      <div key={"content-"+(period||"all")} style={{padding:"14px 20px 80px"}}>
+
+        {/* Period tabs — scrollable, no overflow */}
+        <div style={{position:"relative",display:"flex",gap:3,marginBottom:period?16:28,background:DB.paper,
+          padding:3,borderRadius:12,border:"1px solid "+DB.hairline,overflow:"hidden"}}>
           {presets.map(function(pair){
-            var v=pair[0],l=pair[1];
-            var sel=period===v;
+            var v=pair[0],l=pair[1],sel=period===v;
             return(
-              <button key={v} onClick={function(){setPeriod(v);}}
-                style={{flex:1,padding:"8px 0",borderRadius:9,border:"none",
+              <button key={v} onClick={function(){setPeriod(sel?null:v);}}
+                style={{flex:1,padding:"9px 2px",borderRadius:9,border:"none",
                   background:sel?DB.ink:"transparent",color:sel?"#fff":DB.muted,
-                  fontSize:12,fontWeight:600,fontFamily:DB.sans,cursor:"pointer"}}>
+                  fontSize:13,fontWeight:600,fontFamily:DB.sans,cursor:"pointer",
+                  whiteSpace:"nowrap",minWidth:0}}>
                 {l}
               </button>
             );
           })}
+          {/* "All" pill shown when nothing selected */}
+          {!period&&(
+            <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",
+              bottom:-20,fontSize:10,color:DB.muted,whiteSpace:"nowrap"}}>
+              tap a tab to filter
+            </div>
+          )}
         </div>
 
-        {rows.length===0?(
-          <div style={{textAlign:"center",color:DB.muted,padding:"48px 0",fontSize:15}}>No data for this period yet.</div>
-        ):(
-          <>
-            {/* Averages card */}
-            <div style={{background:DB.paper,borderRadius:18,border:"1px solid "+DB.hairline,overflow:"hidden",marginBottom:16}}>
-              <div style={{padding:"14px 18px 8px",borderBottom:"1px solid "+DB.hairline}}>
-                <div style={{fontSize:10,letterSpacing:1.2,textTransform:"uppercase",fontWeight:700,color:DB.muted}}>
-                  Averages · {rows.length} days with data
-                </div>
-              </div>
-              {[["Last awake window","awLast"],["Total awake time","awakeTotal"],["Nap sleep","sleepDay"],["Night sleep","sleepNight"],["Total sleep","sleepTotal"]].map(function(pair){
-                var label=pair[0],key=pair[1];
-                var val=avg(key);
-                if(val===null)return null;
-                var isTotal=key==="sleepTotal";
-                return(
-                  <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                    padding:"11px 18px",borderBottom:"1px solid "+DB.hairline}}>
-                    <span style={{fontSize:14,color:DB.ink2}}>{label}</span>
-                    <span style={{fontSize:isTotal?16:14,fontWeight:700,color:isTotal?accentDeep:DB.ink,
-                      fontFamily:isTotal?DB.serif:DB.sans,letterSpacing:isTotal?-0.3:0}}>{fmtDur(val)}</span>
-                  </div>
-                );
-              })}
+        {/* Period summary card */}
+        {dataRows.length>0&&(
+          <div key={"summary-"+(period||"all")} style={{marginBottom:16}}>
+            <div style={{fontSize:10,letterSpacing:1.2,textTransform:"uppercase",
+              fontWeight:700,color:DB.muted,marginBottom:10,paddingLeft:2}}>
+              {period?"Last "+period+" days":"All time"} · {dataRows.length} days with data
             </div>
 
-            {/* Day by day */}
-            <div style={{background:DB.paper,borderRadius:18,border:"1px solid "+DB.hairline,overflow:"hidden"}}>
-              <div style={{padding:"14px 18px 8px",borderBottom:"1px solid "+DB.hairline}}>
-                <div style={{fontSize:10,letterSpacing:1.2,textTransform:"uppercase",fontWeight:700,color:DB.muted}}>Day by day</div>
-              </div>
-              {rows.map(function(r){
-                const d=new Date(r.date+"T12:00:00");
-                const dayLabel=d.toLocaleDateString("en-GB",{weekday:"short",month:"short",day:"numeric"});
-                const chips=[
-                  r.sleepDay!==null&&{label:"Naps",val:fmtDur(r.sleepDay),total:false},
-                  r.sleepNight!==null&&{label:"Night",val:fmtDur(r.sleepNight),total:false},
-                  r.sleepTotal!==null&&{label:"Total sleep",val:fmtDur(r.sleepTotal),total:true},
-                  r.awakeTotal!==null&&{label:"Awake",val:fmtDur(r.awakeTotal),total:false},
-                ].filter(Boolean);
-                return(
-                  <div key={r.date} style={{padding:"12px 18px",borderBottom:"1px solid "+DB.hairline}}>
-                    <div style={{fontSize:12,color:DB.muted,marginBottom:8,fontWeight:500}}>{dayLabel}</div>
-                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                      {chips.map(function(chip){return(
-                        <div key={chip.label} style={{padding:"5px 12px",borderRadius:100,
-                          background:chip.total?accentSoft:"#F5F1EE",
-                          fontSize:12,fontWeight:chip.total?700:500,
-                          color:chip.total?accentDeep:DB.ink2}}>
-                          {chip.label} <span style={{fontWeight:700,color:chip.total?accentDeep:DB.ink}}>{chip.val}</span>
+            {/* 4 stat cards in 2x2 grid */}
+            {(function(){
+              // avg nap count = avg number of naps per day
+              var napCounts=dataRows.map(function(r){return r.napCount||0;});
+              var avgNapCount=napCounts.length?Math.round(napCounts.reduce(function(a,b){return a+b;},0)/napCounts.length):null;
+
+              // avg single nap duration = total nap time / total naps
+              var totalNapMins=dataRows.reduce(function(s,r){return s+(r.sleepDay||0);},0);
+              var totalNaps=dataRows.reduce(function(s,r){return s+(r.napCount||0);},0);
+              var avgSingleNap=totalNaps>0?Math.round(totalNapMins/totalNaps):null;
+
+              // avg night sleep
+              var nightVals=dataRows.map(function(r){return r.sleepNight;}).filter(function(v){return v!=null;});
+              var avgNightSleep=nightVals.length?Math.round(nightVals.reduce(function(a,b){return a+b;},0)/nightVals.length):null;
+
+              // avg total nap time per day
+              var napVals=dataRows.map(function(r){return r.sleepDay;}).filter(function(v){return v!=null;});
+              var avgTotalNaps=napVals.length?Math.round(napVals.reduce(function(a,b){return a+b;},0)/napVals.length):null;
+
+              var cards=[
+                {
+                  icon:"moon", iconColor:nightColor, bg:nightSoftColor,
+                  label:"Night sleep",
+                  value:avgNightSleep!=null?(Math.floor(avgNightSleep/60)+"h "+(avgNightSleep%60)+"m"):null,
+                  sub:"average per night",
+                },
+                {
+                  icon:"nap", iconColor:color.accent, bg:accentSoft,
+                  label:"Naps per day",
+                  value:avgNapCount!=null?avgNapCount+"":null,
+                  sub:"average number",
+                },
+                {
+                  icon:"nap", iconColor:color.accent, bg:accentSoft,
+                  label:"Each nap",
+                  value:avgSingleNap!=null?(avgSingleNap>=60?Math.floor(avgSingleNap/60)+"h "+(avgSingleNap%60)+"m":avgSingleNap+"m"):null,
+                  sub:"average duration",
+                },
+                {
+                  icon:"sun", iconColor:DB.muted, bg:DB.hairlineSoft||"#F4ECE0",
+                  label:"Naps total",
+                  value:avgTotalNaps!=null?(Math.floor(avgTotalNaps/60)+"h "+(avgTotalNaps%60)+"m"):null,
+                  sub:"per day",
+                },
+              ];
+
+              return(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  {cards.map(function(card){
+                    if(!card.value)return null;
+                    return(
+                      <div key={card.label} style={{background:DB.paper,borderRadius:16,
+                        border:"1px solid "+DB.hairline,padding:"14px 16px",
+                        borderTop:"3px solid "+card.iconColor}}>
+                        <div style={{fontSize:11,color:DB.muted,fontWeight:600,marginBottom:6,lineHeight:1.3}}>
+                          {card.label}
                         </div>
-                      );})}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
+                        <div style={{fontFamily:DB.serif,fontSize:30,fontWeight:400,
+                          color:DB.ink,letterSpacing:-0.8,lineHeight:1,marginBottom:4}}>
+                          {card.value}
+                        </div>
+                        <div style={{fontSize:11,color:DB.muted}}>{card.sub}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* By day timeline */}
+        {rows.length>0&&(
+          <DayTimelines rows={rows} color={color} nightColor={nightColor} accentDeep={accentDeep} accentSoft={accentSoft} period={period}/>
+        )}
+
+        {dataRows.length===0&&(
+          <div style={{textAlign:"center",color:DB.muted,padding:"48px 0",fontSize:15}}>No data for this period yet.</div>
         )}
       </div>
     </div>
   );
+}
+
+function DayTimelines(props) {
+  var rows=props.rows, color=props.color, nightColor=props.nightColor;
+  var accentDeep=props.accentDeep, accentSoft=props.accentSoft;
+  var period=props.period;
+  const [activeDate, setActiveDate] = useState(null);
+  useEffect(function(){ setActiveDate(null); }, [period]);
+
+  function minToHHMM(m){
+    if(m===null||m===undefined)return"—";
+    var h=Math.floor(m/60),mn=m%60;
+    return String(h).padStart(2,"0")+":"+String(mn).padStart(2,"0");
+  }
+  function buildTooltip(r){
+    var lines=[];
+    var day=r.day||{};
+    var wn=timeToMin(day.wakeNight||""), s1=timeToMin(day.sleep1||""), a2=timeToMin(day.awake2||""),
+        s2=timeToMin(day.sleep2||""), a3=timeToMin(day.awake3||""), s3=timeToMin(day.sleep3||""),
+        a4=timeToMin(day.awake4||""), s4=timeToMin(day.sleep4||""), a5=timeToMin(day.awake5||""),
+        s5=timeToMin(day.sleep5||""), a6=timeToMin(day.awake6||""), ns=timeToMin(day.nightSleep||"");
+    if(wn!==null) lines.push({label:"Woke up",val:minToHHMM(wn),type:"wake"});
+    if(s1!==null&&a2!==null) lines.push({label:"Nap 1",val:minToHHMM(s1)+" – "+minToHHMM(a2)+" · "+fmtDur(a2-s1),type:"nap"});
+    if(s2!==null&&a3!==null) lines.push({label:"Nap 2",val:minToHHMM(s2)+" – "+minToHHMM(a3)+" · "+fmtDur(a3-s2),type:"nap"});
+    if(s3!==null&&a4!==null) lines.push({label:"Nap 3",val:minToHHMM(s3)+" – "+minToHHMM(a4)+" · "+fmtDur(a4-s3),type:"nap"});
+    if(s4!==null&&a5!==null) lines.push({label:"Nap 4",val:minToHHMM(s4)+" – "+minToHHMM(a5)+" · "+fmtDur(a5-s4),type:"nap"});
+    if(s5!==null&&a6!==null) lines.push({label:"Nap 5",val:minToHHMM(s5)+" – "+minToHHMM(a6)+" · "+fmtDur(a6-s5),type:"nap"});
+    if(ns!==null) lines.push({label:"Night sleep",val:minToHHMM(ns)+" → 00:00",type:"night"});
+    if(r.sleepNight!=null) lines.push({label:"Night total",val:fmtDur(r.sleepNight),type:"total"});
+    if(r.sleepDay!=null) lines.push({label:"Naps total",val:fmtDur(r.sleepDay),type:"total"});
+    if(r.sleepTotal!=null) lines.push({label:"Total sleep",val:fmtDur(r.sleepTotal),type:"grand"});
+    return lines;
+  }
+
+  return(
+    <div>
+      <div style={{fontSize:10,letterSpacing:1.3,textTransform:"uppercase",fontWeight:700,color:DB.muted,marginBottom:10}}>By day</div>
+      <div style={{display:"flex",flexDirection:"column",gap:4}}>
+        {rows.map(function(r){
+          var d=new Date(r.date+"T12:00:00");
+          var isToday=r.date===todayStr();
+          var isActive=activeDate===r.date;
+          var dow=d.toLocaleDateString("en-GB",{weekday:"short"});
+          var dayNum=d.getDate();
+          var tooltip=isActive?buildTooltip(r):null;
+
+          return(
+            <div key={r.date}>
+              <div onClick={function(){if(r.hasData)setActiveDate(isActive?null:r.date);}}
+                style={{display:"flex",alignItems:"center",gap:10,
+                  padding:"8px 10px",borderRadius:12,
+                  background:isActive?DB.paper:isToday?DB.paper:"transparent",
+                  border:isActive?"1px solid "+accentDeep:(isToday?"1px solid "+DB.hairline:"1px solid transparent"),
+                  opacity:r.hasData?1:0.3,cursor:r.hasData?"pointer":"default",
+                  transition:"all 0.15s"}}>
+                {/* Date */}
+                <div style={{width:40,flexShrink:0}}>
+                  <div style={{fontSize:10,color:isToday?accentDeep:DB.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:0.3}}>{dow}</div>
+                  <div style={{fontFamily:DB.serif,fontSize:22,color:isActive?accentDeep:DB.ink,lineHeight:1,letterSpacing:-0.5}}>{dayNum}</div>
+                </div>
+                {/* Bar + scale */}
+                <div style={{flex:1,minWidth:0}}>
+                  {/* Hour scale */}
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:8,
+                    color:DB.muted,marginBottom:3,letterSpacing:0.2,paddingRight:1}}>
+                    {["00","06","12","18","24"].map(function(h){return <span key={h}>{h}</span>;})}
+                  </div>
+                  {/* Timeline */}
+                  <div style={{position:"relative",height:14,borderRadius:5,background:DB.hairline,overflow:"hidden"}}>
+                    {r.segs.map(function(seg,si){
+                      var lp=(seg.start/1440)*100;
+                      var wp=((seg.end-seg.start)/1440)*100;
+                      var bg=seg.type==="night"?nightColor:color.accent;
+                      return <div key={si} style={{position:"absolute",left:lp+"%",width:wp+"%",height:"100%",background:bg,borderRadius:3}}/>;
+                    })}
+                  </div>
+                </div>
+                {/* Total */}
+                <div style={{width:52,textAlign:"right",flexShrink:0}}>
+                  {r.hasData&&r.sleepTotal!=null
+                    ?<span style={{fontSize:11,fontWeight:700,color:isActive?accentDeep:DB.ink}}>{fmtDur(r.sleepTotal)}</span>
+                    :<span style={{fontSize:11,color:DB.muted}}>—</span>}
+                </div>
+              </div>
+
+              {/* Tooltip panel */}
+              {isActive&&tooltip&&tooltip.length>0&&(
+                <div style={{margin:"2px 0 6px 50px",padding:"10px 14px",borderRadius:12,
+                  background:DB.paper,border:"1px solid "+DB.hairline,
+                  boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
+                  {tooltip.map(function(line,li){
+                    var isGrand=line.type==="grand";
+                    var isTotal=line.type==="total";
+                    var isNight=line.type==="night";
+                    var isNap=line.type==="nap";
+                    return(
+                      <div key={li} style={{display:"flex",justifyContent:"space-between",
+                        alignItems:"baseline",padding:"4px 0",
+                        borderBottom:li<tooltip.length-1?"1px solid "+DB.hairlineSoft:"none",
+                        borderTop:isGrand?"1px solid "+DB.hairline:"none",
+                        marginTop:isGrand?4:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          {isNight&&<div style={{width:8,height:8,borderRadius:2,background:nightColor,flexShrink:0}}/>}
+                          {isNap&&<div style={{width:8,height:8,borderRadius:2,background:color.accent,flexShrink:0}}/>}
+                          <span style={{fontSize:11,color:isGrand?DB.ink:DB.muted,fontWeight:isGrand?700:400}}>{line.label}</span>
+                        </div>
+                        <span style={{fontSize:11,fontWeight:isGrand?700:600,
+                          color:isGrand?accentDeep:isTotal?DB.ink:DB.ink2,
+                          fontFamily:isGrand?DB.serif:DB.sans,letterSpacing:isGrand?-0.3:0}}>
+                          {line.val}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* Legend */}
+      <div style={{display:"flex",gap:16,marginTop:12,padding:"0 4px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:DB.muted}}>
+          <div style={{width:10,height:10,borderRadius:2,background:nightColor}}/>Night
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:DB.muted}}>
+          <div style={{width:10,height:10,borderRadius:2,background:color.accent}}/>Nap
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buildTimelineSegs(day){
+  var segs=[];
+  var g=function(k){return timeToMin(day[k]||"");};
+  var wn=g("wakeNight"),s1=g("sleep1"),a2=g("awake2"),s2=g("sleep2"),a3=g("awake3"),
+      s3=g("sleep3"),a4=g("awake4"),s4=g("sleep4"),a5=g("awake5"),s5=g("sleep5"),a6=g("awake6"),ns=g("nightSleep");
+  if(wn!==null) segs.push({type:"night",start:0,end:wn});
+  var naps=[[s1,a2],[s2,a3],[s3,a4],[s4,a5],[s5,a6]];
+  naps.forEach(function(pair){
+    if(pair[0]!==null&&pair[1]!==null) segs.push({type:"nap",start:pair[0],end:pair[1]});
+  });
+  if(ns!==null) segs.push({type:"night",start:ns,end:1440});
+  return segs;
 }
 
 
