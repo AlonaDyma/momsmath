@@ -496,7 +496,17 @@ function AddBabyScreen(props) {
         <div style={{position:"relative",marginBottom:18}}>
           <input type="date" value={dob} onChange={function(e){setDob(e.target.value);}} max={todayStr()}
             style={{width:"100%",padding:"13px 44px 13px 16px",borderRadius:12,border:"1px solid "+DB.hairline,fontSize:16,
-              fontFamily:DB.sans,background:DB.paper,outline:"none",boxSizing:"border-box",color:dob?DB.ink:DB.muted,display:"block"}}/>
+              fontFamily:DB.sans,background:DB.paper,outline:"none",boxSizing:"border-box",
+              color:dob?DB.ink:"transparent",display:"block",position:"relative",zIndex:1}}/>
+          {/* iOS Safari shows a fully blank box for an empty date input — overlay our own
+              placeholder text so it's clear this field is tappable, matching the visible
+              dd/mm/yyyy hint other browsers show natively. */}
+          {!dob&&(
+            <div style={{position:"absolute",left:16,top:"50%",transform:"translateY(-50%)",
+              fontSize:16,color:DB.muted,pointerEvents:"none",fontFamily:DB.sans}}>
+              Select date
+            </div>
+          )}
           <div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}>
             <Ic name="calendar" size={17} color={DB.muted}/>
           </div>
@@ -783,7 +793,7 @@ function CalcSummary(props) {
   // type: "night" | "nap" | "awake" | "total"
   const rows=[
     {label:"Night sleep",       val:calc.sleepNight, type:"night"},
-    {label:"Nap sleep",         val:calc.sleepDay,   type:"nap"},
+    {label:"Nap sleep"+(calc.napCount?" ("+calc.napCount+")":""), val:calc.sleepDay, type:"nap"},
     {label:"Last awake window", val:calc.awLast,     type:"awake"},
     {label:"Total awake time",  val:calc.awakeTotal, type:"awake"},
     {label:"Total sleep",       val:calc.sleepTotal, type:"total"},
@@ -1037,8 +1047,16 @@ function DayTimelines(props) {
   var rows=props.rows, color=props.color, nightColor=props.nightColor;
   var accentDeep=props.accentDeep, accentSoft=props.accentSoft;
   var period=props.period;
-  const [activeDate, setActiveDate] = useState(null);
-  useEffect(function(){ setActiveDate(null); }, [period]);
+  // Multiple days can be expanded at once, so two (or more) can be compared side by side.
+  const [activeDates, setActiveDates] = useState({});
+  useEffect(function(){ setActiveDates({}); }, [period]);
+  function toggleDate(d){
+    setActiveDates(function(prev){
+      var next=Object.assign({}, prev);
+      if(next[d]) delete next[d]; else next[d]=true;
+      return next;
+    });
+  }
 
   function minToHHMM(m){
     if(m===null||m===undefined)return"—";
@@ -1072,14 +1090,14 @@ function DayTimelines(props) {
         {rows.map(function(r){
           var d=new Date(r.date+"T12:00:00");
           var isToday=r.date===todayStr();
-          var isActive=activeDate===r.date;
+          var isActive=!!activeDates[r.date];
           var dow=d.toLocaleDateString("en-GB",{weekday:"short"});
           var dayNum=d.getDate();
           var tooltip=isActive?buildTooltip(r):null;
 
           return(
             <div key={r.date}>
-              <div onClick={function(){if(r.hasData)setActiveDate(isActive?null:r.date);}}
+              <div onClick={function(){if(r.hasData)toggleDate(r.date);}}
                 style={{display:"flex",alignItems:"center",gap:10,
                   padding:"8px 10px",borderRadius:12,
                   background:isActive?DB.paper:isToday?DB.paper:"transparent",
@@ -1116,11 +1134,15 @@ function DayTimelines(props) {
                 </div>
               </div>
 
-              {/* Tooltip panel */}
+              {/* Tooltip panel — full width, symmetric padding, can have several open at once */}
               {isActive&&tooltip&&tooltip.length>0&&(
-                <div style={{margin:"2px 0 6px 50px",padding:"10px 14px",borderRadius:12,
-                  background:DB.paper,border:"1px solid "+DB.hairline,
+                <div style={{margin:"4px 0 8px",padding:"14px 16px",borderRadius:14,
+                  background:DB.paper,border:"1.5px solid "+accentDeep,
                   boxShadow:"0 4px 16px rgba(0,0,0,0.08)"}}>
+                  <div style={{fontSize:10,letterSpacing:1,textTransform:"uppercase",
+                    fontWeight:700,color:accentDeep,marginBottom:8}}>
+                    {dow} {dayNum}
+                  </div>
                   {tooltip.map(function(line,li){
                     var isGrand=line.type==="grand";
                     var isTotal=line.type==="total";
@@ -1128,18 +1150,18 @@ function DayTimelines(props) {
                     var isNap=line.type==="nap";
                     return(
                       <div key={li} style={{display:"flex",justifyContent:"space-between",
-                        alignItems:"baseline",padding:"4px 0",
+                        alignItems:"center",padding:"7px 0",
                         borderBottom:li<tooltip.length-1?"1px solid "+DB.hairlineSoft:"none",
                         borderTop:isGrand?"1px solid "+DB.hairline:"none",
-                        marginTop:isGrand?4:0}}>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          {isNight&&<div style={{width:8,height:8,borderRadius:2,background:nightColor,flexShrink:0}}/>}
-                          {isNap&&<div style={{width:8,height:8,borderRadius:2,background:color.accent,flexShrink:0}}/>}
-                          <span style={{fontSize:11,color:isGrand?DB.ink:DB.muted,fontWeight:isGrand?700:400}}>{line.label}</span>
+                        marginTop:isGrand?6:0,paddingTop:isGrand?10:7}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+                          <div style={{width:8,height:8,borderRadius:2,flexShrink:0,
+                            background:isNight?nightColor:isNap?color.accent:"transparent"}}/>
+                          <span style={{fontSize:13,color:isGrand?DB.ink:DB.ink2,fontWeight:isGrand?700:400}}>{line.label}</span>
                         </div>
-                        <span style={{fontSize:11,fontWeight:isGrand?700:600,
+                        <span style={{fontSize:isGrand?15:13,fontWeight:isGrand?700:600,
                           color:isGrand?accentDeep:isTotal?DB.ink:DB.ink2,
-                          fontFamily:isGrand?DB.serif:DB.sans,letterSpacing:isGrand?-0.3:0}}>
+                          fontFamily:isGrand?DB.serif:DB.sans,letterSpacing:isGrand?-0.3:0,flexShrink:0}}>
                           {line.val}
                         </span>
                       </div>
