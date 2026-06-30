@@ -206,11 +206,38 @@ function fmtDateLong(str){
 }
 function getAge(dob){
   if(!dob)return"";
-  const days=Math.floor((new Date()-new Date(dob))/86400000);
-  if(days<30)return days+" days old";
-  const mo=Math.floor(days/30.44);
-  if(mo<24)return mo+" months old";
-  return Math.floor(mo/12)+" years old";
+  var birth=new Date(dob+"T00:00:00");
+  var now=new Date();
+  var days=Math.floor((now-birth)/86400000);
+  if(days<0)return""; // future date — nothing sensible to show
+  if(days===0)return"Newborn";
+
+  // Under 1 month: just days
+  if(days<30) return days+(days===1?" day old":" days old");
+
+  // Calendar-based breakdown: walk forward in real calendar years/months from the
+  // birth date, so boundaries land exactly on a year/month rather than drifting
+  // from an averaged day count (e.g. 365 days from birth is always exactly "1 y").
+  var years=now.getFullYear()-birth.getFullYear();
+  var months=now.getMonth()-birth.getMonth();
+  var dayDiff=now.getDate()-birth.getDate();
+  if(dayDiff<0){ months-=1; }
+  if(months<0){ years-=1; months+=12; }
+
+  if(years<1){
+    // Under 1 year: months + remaining days, e.g. "4 mo 4 d"
+    var monthStart=new Date(birth);
+    monthStart.setMonth(monthStart.getMonth()+months);
+    var remDays=Math.floor((now-monthStart)/86400000);
+    var s="";
+    if(months>0) s+=months+" mo";
+    if(remDays>0) s+=(s?" ":"")+remDays+" d";
+    return s||"0 d";
+  }
+  // 1 year or more: years + remaining months, e.g. "2 y 6 mo"
+  var s2=years+" y";
+  if(months>0) s2+=" "+months+" mo";
+  return s2;
 }
 function getDatesBack(n){
   const r=[];for(var i=0;i<n;i++){const d=new Date();d.setDate(d.getDate()-i);r.push(d.toISOString().slice(0,10));}return r;
@@ -495,20 +522,22 @@ function AddBabyScreen(props) {
         <FLabel>Date of birth</FLabel>
         <div style={{position:"relative",marginBottom:18}}>
           <input type="date" value={dob} onChange={function(e){setDob(e.target.value);}} max={todayStr()}
-            style={{width:"100%",padding:"13px 44px 13px 16px",borderRadius:12,border:"1px solid "+DB.hairline,fontSize:16,
+            style={{width:"100%",padding:"15px 46px 15px 16px",borderRadius:12,
+              border:"1.5px solid "+(dob?DB.primaryDeep||"#BF7958":DB.hairline),fontSize:16,minHeight:50,
               fontFamily:DB.sans,background:DB.paper,outline:"none",boxSizing:"border-box",
-              color:dob?DB.ink:"transparent",display:"block",position:"relative",zIndex:1}}/>
+              color:dob?DB.ink:"transparent",display:"block",position:"relative",zIndex:1,
+              WebkitAppearance:"none",appearance:"none"}}/>
           {/* iOS Safari shows a fully blank box for an empty date input — overlay our own
               placeholder text so it's clear this field is tappable, matching the visible
               dd/mm/yyyy hint other browsers show natively. */}
           {!dob&&(
             <div style={{position:"absolute",left:16,top:"50%",transform:"translateY(-50%)",
-              fontSize:16,color:DB.muted,pointerEvents:"none",fontFamily:DB.sans}}>
-              Select date
+              fontSize:16,color:DB.muted,pointerEvents:"none",fontFamily:DB.sans,fontStyle:"italic"}}>
+              Tap to select date of birth
             </div>
           )}
           <div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}>
-            <Ic name="calendar" size={17} color={DB.muted}/>
+            <Ic name="calendar" size={19} color={dob?DB.ink:DB.muted}/>
           </div>
         </div>
 
@@ -956,7 +985,7 @@ function ReportsScreen(props) {
           <div key={"summary-"+(period||"all")} style={{marginBottom:16}}>
             <div style={{fontSize:10,letterSpacing:1.2,textTransform:"uppercase",
               fontWeight:700,color:DB.muted,marginBottom:10,paddingLeft:2}}>
-              {period?"Last "+period+" days":"All time"} · {dataRows.length} days with data
+              {period?"Last "+period+" days":"All time"} · {dataRows.length} {dataRows.length===1?"day":"days"} with data
             </div>
 
             {/* 4 stat cards in 2x2 grid */}
@@ -1143,30 +1172,42 @@ function DayTimelines(props) {
                     fontWeight:700,color:accentDeep,marginBottom:8}}>
                     {dow} {dayNum}
                   </div>
-                  {tooltip.map(function(line,li){
-                    var isGrand=line.type==="grand";
-                    var isTotal=line.type==="total";
-                    var isNight=line.type==="night";
-                    var isNap=line.type==="nap";
-                    return(
-                      <div key={li} style={{display:"flex",justifyContent:"space-between",
-                        alignItems:"center",padding:"7px 0",
-                        borderBottom:li<tooltip.length-1?"1px solid "+DB.hairlineSoft:"none",
-                        borderTop:isGrand?"1px solid "+DB.hairline:"none",
-                        marginTop:isGrand?6:0,paddingTop:isGrand?10:7}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-                          <div style={{width:8,height:8,borderRadius:2,flexShrink:0,
-                            background:isNight?nightColor:isNap?color.accent:"transparent"}}/>
-                          <span style={{fontSize:13,color:isGrand?DB.ink:DB.ink2,fontWeight:isGrand?700:400}}>{line.label}</span>
+                  {/* Facts (what happened, and when) vs summary rows (computed totals)
+                      get a distinct background so the eye can separate "raw events"
+                      from "the math we did with them" at a glance. */}
+                  {(function(){
+                    var firstSummaryIdx=tooltip.findIndex(function(l){return l.type==="total"||l.type==="grand";});
+                    return tooltip.map(function(line,li){
+                      var isGrand=line.type==="grand";
+                      var isTotal=line.type==="total";
+                      var isNight=line.type==="night";
+                      var isNap=line.type==="nap";
+                      var isSummary=isTotal||isGrand;
+                      var isFirstSummary=firstSummaryIdx===li;
+                      var isLastSummary=isSummary&&li===tooltip.length-1;
+                      return(
+                        <div key={li} style={{display:"flex",justifyContent:"space-between",
+                          alignItems:"center",padding:isSummary?"7px 12px":"7px 0",
+                          margin:isSummary?"0 -12px":0,
+                          background:isSummary?(accentSoft+"33"):"transparent",
+                          borderRadius:isFirstSummary&&isLastSummary?10:isFirstSummary?"10px 10px 0 0":isLastSummary?"0 0 10px 10px":0,
+                          borderBottom:!isSummary&&li<tooltip.length-1?"1px solid "+DB.hairlineSoft:"none",
+                          borderTop:isFirstSummary?"1px solid "+DB.hairline:"none",
+                          marginTop:isFirstSummary?8:0,paddingTop:isGrand?10:isSummary?7:7}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+                            <div style={{width:8,height:8,borderRadius:2,flexShrink:0,
+                              background:isNight?nightColor:isNap?color.accent:"transparent"}}/>
+                            <span style={{fontSize:13,color:isGrand?DB.ink:DB.ink2,fontWeight:isGrand?700:isTotal?600:400}}>{line.label}</span>
+                          </div>
+                          <span style={{fontSize:isGrand?15:13,fontWeight:isGrand?700:600,
+                            color:isGrand?accentDeep:isTotal?DB.ink:DB.ink2,
+                            fontFamily:isGrand?DB.serif:DB.sans,letterSpacing:isGrand?-0.3:0,flexShrink:0}}>
+                            {line.val}
+                          </span>
                         </div>
-                        <span style={{fontSize:isGrand?15:13,fontWeight:isGrand?700:600,
-                          color:isGrand?accentDeep:isTotal?DB.ink:DB.ink2,
-                          fontFamily:isGrand?DB.serif:DB.sans,letterSpacing:isGrand?-0.3:0,flexShrink:0}}>
-                          {line.val}
-                        </span>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </div>
